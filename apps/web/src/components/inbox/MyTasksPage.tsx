@@ -100,7 +100,13 @@ function dueText(due: number | null): string | null {
   if (due < startOfDay(2)) return "Tomorrow";
   return new Date(due).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
-const STATUS_RANK: Record<string, number> = { open: 0, custom: 1, done: 2, closed: 3 };
+const STATUS_RANK: Record<string, number> = {
+  unstarted: 0,
+  open: 0,
+  custom: 1,
+  done: 2,
+  closed: 3,
+};
 const PRIORITY_ORDER = ["urgent", "high", "normal", "low", "none"];
 
 interface Filters {
@@ -108,8 +114,9 @@ interface Filters {
   readonly lists: ReadonlyArray<string>;
   readonly priorities: ReadonlyArray<string>;
   readonly tags: ReadonlyArray<string>;
+  readonly ages: ReadonlyArray<string>;
 }
-const NO_FILTERS: Filters = { statuses: [], lists: [], priorities: [], tags: [] };
+const NO_FILTERS: Filters = { statuses: [], lists: [], priorities: [], tags: [], ages: [] };
 function readFilters(): Filters {
   try {
     const raw = JSON.parse(
@@ -123,6 +130,7 @@ function readFilters(): Filters {
           lists: list(raw.lists),
           priorities: list(raw.priorities),
           tags: list(raw.tags),
+          ages: list(raw.ages),
         }
       : NO_FILTERS;
   } catch {
@@ -130,7 +138,23 @@ function readFilters(): Filters {
   }
 }
 const priorityKey = (task: MyTask) => (task.priority?.priority || "none").toLowerCase();
+const isDoneStatus = (status: TaskStatus) => status.type === "done" || status.type === "closed";
+/** How long since anyone touched the task. */
+const AGES = [
+  { value: "week", label: "Updated this week", maxDays: 7 },
+  { value: "month", label: "Updated this month", maxDays: 30 },
+  { value: "quarter", label: "30 to 90 days ago", maxDays: 90 },
+  { value: "stale", label: "Not touched in 90 days", maxDays: Number.POSITIVE_INFINITY },
+] as const;
+function ageKey(task: MyTask): string {
+  const days = (Date.now() - task.date_updated) / 86_400_000;
+  return (AGES.find((a) => days <= a.maxDays) ?? AGES[AGES.length - 1]!).value;
+}
 function matchesFilters(task: MyTask, f: Filters): boolean {
+  // finished work stays out of the way unless the status filter asks for it
+  if (isDoneStatus(task.status) && !f.statuses.includes(task.status.status.toLowerCase()))
+    return false;
+  if (f.ages.length > 0 && !f.ages.includes(ageKey(task))) return false;
   if (f.statuses.length > 0 && !f.statuses.includes(task.status.status.toLowerCase())) return false;
   if (f.lists.length > 0 && !f.lists.includes(task.list.id)) return false;
   if (f.priorities.length > 0 && !f.priorities.includes(priorityKey(task))) return false;
@@ -263,7 +287,7 @@ function FilterBar({
     )
     .map((s) => ({
       value: s.status.toLowerCase(),
-      label: s.status,
+      label: isDoneStatus(s) ? `${s.status} (hidden unless ticked)` : s.status,
       count: statusCounts.get(s.status.toLowerCase()) ?? 0,
       color: s.color,
     }));
@@ -282,6 +306,12 @@ function FilterBar({
     count: priorityCounts.get(p) ?? 0,
     color: rows.find((r) => priorityKey(r) === p)?.priority?.color ?? "",
   }));
+  const ageCounts = tally(rows.filter((r) => !isDoneStatus(r.status)).map(ageKey));
+  const ages = AGES.filter((a) => ageCounts.has(a.value)).map((a) => ({
+    value: a.value,
+    label: a.label,
+    count: ageCounts.get(a.value) ?? 0,
+  }));
   const tagCounts = tally(rows.flatMap((r) => r.tags.map((t) => t.name.toLowerCase())));
   const tags = [...tagCounts.entries()]
     .sort((a, b) => b[1] - a[1])
@@ -290,7 +320,8 @@ function FilterBar({
     filters.statuses.length +
       filters.lists.length +
       filters.priorities.length +
-      filters.tags.length >
+      filters.tags.length +
+      filters.ages.length >
     0;
   return (
     <div className="flex flex-wrap items-center gap-1">
@@ -318,6 +349,12 @@ function FilterBar({
         options={tags}
         selected={filters.tags}
         onChange={(v) => onChange({ ...filters, tags: v })}
+      />
+      <FilterMenu
+        label="Age"
+        options={ages}
+        selected={filters.ages}
+        onChange={(v) => onChange({ ...filters, ages: v })}
       />
       {any ? (
         <Button
@@ -594,7 +631,8 @@ export function MyTasksPage() {
     environments.filter((e) => inOrganisationScope(scope, e.environmentId)).length >
     inScopeFeeds.length;
   const loading = feedsPending || (sources.length > 0 && loadedKey !== sourceKey);
-  const filtered = visible.length < rows.length;
+  const openRows = rows.filter((r) => !isDoneStatus(r.status));
+  const filtered = visible.length < openRows.length;
   const notices = (
     <Notices
       notConnected={feedsPending ? [] : notConnected.map((f) => labelFor(f.environmentId))}
@@ -611,7 +649,7 @@ export function MyTasksPage() {
         </span>
         {!loading ? (
           <Badge variant="secondary" size="sm">
-            {filtered ? `${visible.length} of ${rows.length}` : rows.length}
+            {filtered ? `${visible.length} of ${openRows.length}` : openRows.length}
           </Badge>
         ) : null}
         <div className="min-w-0 flex-1" />
