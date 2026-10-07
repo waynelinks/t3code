@@ -11,7 +11,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { ChevronDownIcon, EllipsisIcon } from "lucide-react";
+import { ChevronDownIcon, EllipsisIcon, SquareMenuIcon } from "lucide-react";
 import {
   memo,
   useCallback,
@@ -23,6 +23,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { createPortal } from "react-dom";
+import { APP_IS_REBRANDED } from "../../branding";
 import GitActionsControl from "../GitActionsControl";
 import { isTrailingDoubleClick } from "../Sidebar.logic";
 import { type DraftId } from "~/composerDraftStore";
@@ -172,7 +173,9 @@ export const ChatHeader = memo(function ChatHeader({
     observer.observe(container);
     return () => observer.disconnect();
   }, []);
-  const actionsCollapsed = isMobile || isNarrowHeader;
+  // Chief keeps the top bar to the breadcrumb and the panel toggles, as the nightly does: the
+  // per-thread actions (scripts, open in, git) always live behind the thread-actions toggle.
+  const actionsCollapsed = APP_IS_REBRANDED || isMobile || isNarrowHeader;
   const [actionsOpen, setActionsOpen] = useState(false);
   const [actionsContainer] = useState(() => {
     const container = document.createElement("div");
@@ -508,9 +511,19 @@ export const ChatHeader = memo(function ChatHeader({
                 ? undefined
                 : "hidden"
             }
-            render={<Button size="icon-sm" variant="ghost" aria-label="More header actions" />}
+            render={
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label={APP_IS_REBRANDED ? "Thread actions" : "More header actions"}
+              />
+            }
           >
-            <EllipsisIcon className="size-4" />
+            {APP_IS_REBRANDED ? (
+              <SquareMenuIcon className="size-4" />
+            ) : (
+              <EllipsisIcon className="size-4" />
+            )}
           </MenuTrigger>
           <div ref={mountInlineActions} className="contents" />
           <MenuPopup
