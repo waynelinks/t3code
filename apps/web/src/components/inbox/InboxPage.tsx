@@ -21,6 +21,7 @@ import {
   useState,
   type ChangeEvent,
   type KeyboardEvent,
+  type ReactElement,
   type ReactNode,
 } from "react";
 
@@ -47,6 +48,7 @@ import { Spinner } from "../ui/spinner";
 import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 
 interface Row extends InboxItem {
@@ -81,6 +83,7 @@ const TASK_LABEL: Record<string, string> = {
   needs_owner: "Build needs you",
   green: "Pull request ready",
 };
+const SHORTCUTS = "Arrow keys move · E done · S snooze · R reply · Ctrl+Enter sends";
 
 function timeAgo(iso: string): string {
   const seconds = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
@@ -94,8 +97,7 @@ function timeAgo(iso: string): string {
 function fullDate(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
     day: "numeric",
-    month: "long",
-    year: "numeric",
+    month: "short",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -138,6 +140,37 @@ function Avatar({ name, className }: { name: string; className?: string }) {
     >
       {initials(name)}
     </span>
+  );
+}
+
+function IconAction({
+  label,
+  onClick,
+  disabled,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: ReactElement;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            size="icon-sm"
+            variant="outline"
+            aria-label={label}
+            disabled={disabled}
+            onClick={onClick}
+          />
+        }
+      >
+        {children}
+      </TooltipTrigger>
+      <TooltipPopup side="bottom">{label}</TooltipPopup>
+    </Tooltip>
   );
 }
 
@@ -227,7 +260,7 @@ export function InboxPage() {
       setBusy(null);
     }
   }, []);
-  // Done or snoozed from the open tab: move on to the next row.
+  // Done, snoozed or reopened: move on to the next row, and offer an undo.
   const actAndAdvance = useCallback<Act>(
     async (row, action, body) => {
       const index = visible.findIndex((r) => r.key === row.key);
@@ -245,7 +278,12 @@ export function InboxPage() {
             children: "Undo",
             onClick: () => {
               toastManager.close(toastId);
-              void act(row, "reopen").then((undone) => undone && setSelectedKey(row.key));
+              void act(row, "reopen").then((undone) => {
+                if (undone) {
+                  setTab("open");
+                  setSelectedKey(row.key);
+                }
+              });
             },
           },
         });
@@ -255,6 +293,7 @@ export function InboxPage() {
     [act, visible],
   );
 
+  // Keyboard: arrows or j/k move, e done, s snooze, r reply, escape closes the reading pane.
   const keyState = useRef({ visible, selected, busy, actAndAdvance });
   keyState.current = { visible, selected, busy, actAndAdvance };
   useEffect(() => {
@@ -266,8 +305,9 @@ export function InboxPage() {
         (target.isContentEditable ||
           /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) ||
           target.closest("[role=menu],[role=listbox],[role=dialog]"))
-      )
+      ) {
         return;
+      }
       const {
         visible: list,
         selected: current,
@@ -275,25 +315,22 @@ export function InboxPage() {
         actAndAdvance: run,
       } = keyState.current;
       const index = current ? list.findIndex((r) => r.key === current.key) : -1;
+      const go = (row: Row | undefined) => {
+        if (!row) return;
+        event.preventDefault();
+        setSelectedKey(row.key);
+        const el = document.querySelector<HTMLElement>(`[data-inbox-key="${CSS.escape(row.key)}"]`);
+        el?.focus({ preventScroll: true });
+        el?.scrollIntoView({ block: "nearest" });
+      };
       const key = event.key;
-      if (key === "ArrowDown" || key === "j") {
-        const next = list[Math.min(index + 1, list.length - 1)];
-        if (next) {
-          setSelectedKey(next.key);
-          event.preventDefault();
-        }
-      } else if (key === "ArrowUp" || key === "k") {
-        const prev = list[Math.max(index - 1, 0)];
-        if (prev) {
-          setSelectedKey(prev.key);
-          event.preventDefault();
-        }
-      } else if (key === "Escape" && current) {
-        setSelectedKey(null);
-      } else if (current && !working && current.status === "open" && key === "e") {
+      if (key === "ArrowDown" || key === "j") go(list[Math.min(index + 1, list.length - 1)]);
+      else if (key === "ArrowUp" || key === "k") go(list[Math.max(index - 1, 0)]);
+      else if (key === "Escape" && current) setSelectedKey(null);
+      else if (current && working === null && current.status === "open" && key === "e") {
         event.preventDefault();
         void run(current, "done");
-      } else if (current && !working && current.status === "open" && key === "s") {
+      } else if (current && working === null && current.status === "open" && key === "s") {
         event.preventDefault();
         void run(current, "snooze", { hours: 24 });
       } else if (current && key === "r") {
@@ -324,13 +361,13 @@ export function InboxPage() {
       <div className="flex min-h-0 flex-1 border-t border-border">
         <aside
           className={cn(
-            "flex min-h-0 w-full shrink-0 flex-col border-r border-border md:w-[360px]",
-            selected ? "hidden md:flex" : "flex",
+            "min-h-0 w-full shrink-0 flex-col border-r border-border md:flex md:w-[360px]",
+            selected ? "hidden" : "flex",
           )}
         >
           <div className="flex flex-col gap-2 p-3">
             <div className="relative">
-              <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+              <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 size="sm"
                 className="pl-8"
@@ -398,13 +435,14 @@ export function InboxPage() {
           </ul>
         </aside>
         <section
-          className={cn("min-h-0 min-w-0 flex-1 flex-col", selected ? "flex" : "hidden md:flex")}
+          className={cn("min-h-0 min-w-0 flex-1 flex-col md:flex", selected ? "flex" : "hidden")}
         >
           {selected ? (
             <Detail
               key={selected.key}
               row={selected}
               busy={busy === selected.key}
+              showOrganisation={scope === "all"}
               onAct={actAndAdvance}
               onBack={() => setSelectedKey(null)}
             />
@@ -412,11 +450,7 @@ export function InboxPage() {
             <div className="flex flex-1 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
               <InboxIcon className="size-6" />
               {visible.length > 0 ? "Choose a message on the left." : "Nothing here."}
-              {visible.length > 0 ? (
-                <span className="text-xs">
-                  Arrow keys move · E done · S snooze · R reply · Ctrl+Enter sends
-                </span>
-              ) : null}
+              {visible.length > 0 ? <span className="text-xs">{SHORTCUTS}</span> : null}
             </div>
           )}
         </section>
@@ -461,11 +495,12 @@ function ListItem({
     <li>
       <button
         type="button"
+        data-inbox-key={row.key}
         onClick={onSelect}
         aria-current={selected ? "true" : undefined}
         className={cn(
           "flex w-full flex-col gap-1 rounded-lg px-3 py-2.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-          selected ? "bg-muted" : "hover:bg-muted/50",
+          selected ? "bg-sidebar-row-selected" : "hover:bg-sidebar-row-hover",
         )}
       >
         <span className="flex w-full items-center gap-2">
@@ -520,11 +555,13 @@ function ListItem({
 function Detail({
   row,
   busy,
+  showOrganisation,
   onAct,
   onBack,
 }: {
   row: Row;
   busy: boolean;
+  showOrganisation: boolean;
   onAct: Act;
   onBack: () => void;
 }) {
@@ -532,15 +569,22 @@ function Detail({
   const liveTask = LIVE_TASK(row);
   const replyable = CAN_REPLY(row) && !liveTask;
   const ctx = row.context as { where?: unknown; thread?: unknown };
-  const where = typeof ctx.where === "string" ? ctx.where : row.source;
+  const where = typeof ctx.where === "string" ? ctx.where : null;
   const thread = Array.isArray(ctx.thread)
     ? (ctx.thread as { who?: string; at?: string; text?: string }[]).filter(
         (x) => x.text && !row.body.includes(x.text),
       )
     : [];
+  const subtitle = [
+    `${KIND_LABEL[row.kind] ?? row.kind}${where ? ` in ${where}` : ""}`,
+    fullDate(row.created_at),
+    showOrganisation ? row.organisation : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex shrink-0 flex-wrap items-start gap-3 border-b border-border px-5 py-3 lg:px-8">
+      <header className="flex shrink-0 items-center gap-3 border-b border-border px-5 py-3 lg:px-8">
         <Button
           size="icon-sm"
           variant="ghost"
@@ -550,77 +594,61 @@ function Detail({
         >
           <ArrowLeftIcon className="size-4" />
         </Button>
-        <Avatar name={row.who || row.source} className="size-10 text-sm" />
+        <Avatar name={row.who || row.source} className="size-9 text-sm" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{row.who || row.source}</p>
-          <p className="truncate text-xs text-muted-foreground">
-            {KIND_LABEL[row.kind] ?? row.kind} in {where} · {row.organisation}
+          <p className="truncate text-xs text-muted-foreground" title={subtitle}>
+            {subtitle}
           </p>
         </div>
-        <div className="flex flex-col items-end gap-2">
-          <time className="text-xs text-muted-foreground" dateTime={row.created_at}>
-            {fullDate(row.created_at)}
-          </time>
-          <div className="flex flex-wrap justify-end gap-1.5">
-            {row.url ? (
-              <Button
-                size="sm"
-                variant="outline"
-                render={<a href={row.url} target="_blank" rel="noreferrer" />}
-              >
-                <ExternalLinkIcon className="size-3.5" />
-                Open in ClickUp
-              </Button>
-            ) : null}
-            {!liveTask && !composingTask && row.source !== "chief" && row.status === "open" ? (
-              <Button
-                size="sm"
-                variant="outline"
+        <div className="flex shrink-0 items-center gap-1.5">
+          {!liveTask && !composingTask && row.source !== "chief" && row.status === "open" ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => setComposingTask(true)}
+            >
+              <ListChecksIcon className="size-3.5" />
+              Make this a task
+            </Button>
+          ) : null}
+          {row.url ? (
+            <IconAction
+              label="Open in ClickUp"
+              onClick={() => window.open(row.url!, "_blank", "noopener,noreferrer")}
+            >
+              <ExternalLinkIcon className="size-4" />
+            </IconAction>
+          ) : null}
+          {row.status === "open" ? (
+            <>
+              <IconAction
+                label="Snooze a day (S)"
                 disabled={busy}
-                onClick={() => setComposingTask(true)}
+                onClick={() => void onAct(row, "snooze", { hours: 24 })}
               >
-                <ListChecksIcon className="size-3.5" />
-                Make this a task
-              </Button>
-            ) : null}
-            {row.status === "open" ? (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => void onAct(row, "snooze", { hours: 24 })}
-                >
-                  <ClockIcon className="size-3.5" />
-                  Snooze a day
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => void onAct(row, "done")}
-                >
-                  <ArchiveIcon className="size-3.5" />
-                  Done
-                </Button>
-              </>
-            ) : (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={busy}
-                onClick={() => void onAct(row, "reopen")}
-              >
-                <UndoIcon className="size-3.5" />
-                Back to open
-              </Button>
-            )}
-          </div>
+                <ClockIcon className="size-4" />
+              </IconAction>
+              <IconAction label="Done (E)" disabled={busy} onClick={() => void onAct(row, "done")}>
+                <ArchiveIcon className="size-4" />
+              </IconAction>
+            </>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => void onAct(row, "reopen")}
+            >
+              <UndoIcon className="size-3.5" />
+              Back to open
+            </Button>
+          )}
         </div>
       </header>
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5 lg:px-8">
         <h2 className="text-lg font-semibold tracking-tight">{row.title}</h2>
-
         {thread.length > 0 ? (
           <div className="flex flex-col gap-2 border-l-2 border-border pl-3">
             {thread.slice(-6).map((x, i) => (
@@ -632,11 +660,9 @@ function Detail({
             ))}
           </div>
         ) : null}
-
         {row.body ? (
           <p className="text-sm leading-relaxed whitespace-pre-wrap">{row.body}</p>
         ) : null}
-
         {row.reply ? (
           <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm">
             <p className="mb-1 text-xs text-muted-foreground">
@@ -645,7 +671,6 @@ function Detail({
             <p className="whitespace-pre-wrap">{row.reply.text}</p>
           </div>
         ) : null}
-
         {liveTask ? (
           <TaskPanel row={row} busy={busy} onAct={onAct} onRetry={() => setComposingTask(true)} />
         ) : null}
@@ -684,6 +709,7 @@ function Composer({ row, busy, onAct }: { row: Row; busy: boolean; onAct: Act })
   }, [row.base, row.id, serverText, text]);
   const drafting = row.draft.state === "pending";
   const hasDraft = row.draft.state === "ready" || row.draft.state === "failed";
+  const canSend = !busy && !drafting && text.trim().length > 0;
   const target =
     row.reply_to?.kind === "channel"
       ? "the conversation"
@@ -727,24 +753,18 @@ function Composer({ row, busy, onAct }: { row: Row; busy: boolean; onAct: Act })
         unstyled
         value={text}
         rows={7}
-        onKeyDown={(event: KeyboardEvent<HTMLTextAreaElement>) => {
-          if (
-            event.key === "Enter" &&
-            (event.ctrlKey || event.metaKey) &&
-            !busy &&
-            !drafting &&
-            text.trim()
-          ) {
-            event.preventDefault();
-            void onAct(row, "send", { text });
-          }
-        }}
         className="w-full resize-none bg-transparent px-4 py-3 text-sm leading-relaxed outline-none"
         placeholder={
           drafting ? "Drafting a reply from the code" : "Write a reply, or draft one from the code"
         }
         onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setText(event.target.value)}
         onBlur={saveDraft}
+        onKeyDown={(event: KeyboardEvent<HTMLTextAreaElement>) => {
+          if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && canSend) {
+            event.preventDefault();
+            void onAct(row, "send", { text });
+          }
+        }}
       />
       {row.draft.checked && row.draft.checked.length > 0 ? (
         <div className="flex flex-wrap gap-2 px-4 pb-3">
@@ -774,11 +794,7 @@ function Composer({ row, busy, onAct }: { row: Row; busy: boolean; onAct: Act })
         </Button>
         <span className="flex-1" />
         <span className="hidden text-xs text-muted-foreground sm:inline">Ctrl+Enter</span>
-        <Button
-          size="sm"
-          disabled={busy || drafting || text.trim().length === 0}
-          onClick={() => void onAct(row, "send", { text })}
-        >
+        <Button size="sm" disabled={!canSend} onClick={() => void onAct(row, "send", { text })}>
           Send reply
           <SendIcon className="size-3.5" />
         </Button>
