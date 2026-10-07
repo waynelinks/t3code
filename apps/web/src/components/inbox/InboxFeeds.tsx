@@ -20,7 +20,10 @@ export function InboxFeeds() {
   return (
     <>
       {environments.map((environment) => (
-        <EnvironmentInboxFeed key={environment.environmentId} environmentId={environment.environmentId} />
+        <EnvironmentInboxFeed
+          key={environment.environmentId}
+          environmentId={environment.environmentId}
+        />
       ))}
     </>
   );
@@ -37,14 +40,31 @@ function EnvironmentInboxFeed({ environmentId }: { environmentId: EnvironmentId 
     let cancelled = false;
     const load = async () => {
       try {
-        const data = await inboxRequest<{ items?: InboxItem[]; health?: InboxHealth; company_label?: string }>(base, "/items");
+        const data = await inboxRequest<{
+          items?: InboxItem[];
+          health?: InboxHealth;
+          company_label?: string;
+        }>(base, "/items?status=all");
         if (cancelled) return;
-        publishInboxFeed({ environmentId, base, companyLabel: data.company_label ?? null, items: data.items ?? [], health: data.health ?? null, error: null, loadedAt: Date.now() });
+        publishInboxFeed({
+          environmentId,
+          base,
+          companyLabel: data.company_label ?? null,
+          items: data.items ?? [],
+          health: data.health ?? null,
+          error: null,
+          loadedAt: Date.now(),
+        });
       } catch (error) {
         if (cancelled) return;
         publishInboxFeed({
-          environmentId, base, companyLabel: getInboxFeed(environmentId)?.companyLabel ?? null, items: getInboxFeed(environmentId)?.items ?? [], health: null,
-          error: error instanceof Error ? error.message : String(error), loadedAt: Date.now(),
+          environmentId,
+          base,
+          companyLabel: getInboxFeed(environmentId)?.companyLabel ?? null,
+          items: getInboxFeed(environmentId)?.items ?? [],
+          health: null,
+          error: error instanceof Error ? error.message : String(error),
+          loadedAt: Date.now(),
         });
       }
     };
@@ -52,10 +72,15 @@ function EnvironmentInboxFeed({ environmentId }: { environmentId: EnvironmentId 
     // Every 30 seconds; every 4 while a spec is being written or a task is building.
     let timer: ReturnType<typeof setTimeout> | undefined;
     const schedule = () => {
-      const busy = (getInboxFeed(environmentId)?.items ?? []).some((item) =>
-        ["speccing", "approved", "running", "failed_rung"].includes(item.task?.status ?? "") || item.draft.state === "pending",
+      const busy = (getInboxFeed(environmentId)?.items ?? []).some(
+        (item) =>
+          ["speccing", "approved", "running", "failed_rung"].includes(item.task?.status ?? "") ||
+          item.draft.state === "pending",
       );
-      timer = setTimeout(() => void load().then(() => !cancelled && schedule()), busy ? 4_000 : INBOX_REFRESH_MS);
+      timer = setTimeout(
+        () => void load().then(() => !cancelled && schedule()),
+        busy ? 4_000 : INBOX_REFRESH_MS,
+      );
     };
     void load().then(() => !cancelled && schedule());
     const onFocus = () => void load();

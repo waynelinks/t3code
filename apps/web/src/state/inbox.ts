@@ -25,6 +25,8 @@ export interface InboxItem {
   readonly kind: string;
   readonly status: string;
   readonly created_at: string;
+  readonly updated_at?: string;
+  readonly snooze_until?: string | null;
   readonly who: string;
   readonly title: string;
   readonly body: string;
@@ -111,11 +113,18 @@ const subscribe = (listener: () => void) => {
   };
 };
 export function useInboxFeeds(): ReadonlyArray<EnvironmentInbox> {
-  return useSyncExternalStore(subscribe, () => snapshot, () => snapshot);
+  return useSyncExternalStore(
+    subscribe,
+    () => snapshot,
+    () => snapshot,
+  );
 }
 
 const refreshers = new Map<EnvironmentId, () => Promise<void>>();
-export function registerInboxRefresher(environmentId: EnvironmentId, refresh: () => Promise<void>): () => void {
+export function registerInboxRefresher(
+  environmentId: EnvironmentId,
+  refresh: () => Promise<void>,
+): () => void {
   refreshers.set(environmentId, refresh);
   return () => {
     if (refreshers.get(environmentId) === refresh) refreshers.delete(environmentId);
@@ -136,7 +145,9 @@ export async function inboxRequest<T = unknown>(
   const hasBody = init?.body !== undefined;
   const response = await fetch(base + path, {
     method: init?.method ?? "GET",
-    ...(hasBody ? { headers: { "content-type": "application/json" }, body: JSON.stringify(init.body) } : {}),
+    ...(hasBody
+      ? { headers: { "content-type": "application/json" }, body: JSON.stringify(init.body) }
+      : {}),
   });
   const data = (await response.json().catch(() => null)) as { error?: string } | null;
   if (!response.ok) throw new Error(data?.error ?? `${response.status} ${response.statusText}`);

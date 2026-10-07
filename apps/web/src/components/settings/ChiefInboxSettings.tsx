@@ -19,13 +19,25 @@ export function ChiefInboxSettings() {
   const organisationLabel = useOrganisationLabel();
   const selected = scope?.environment ?? null;
   const targets = selected
-    ? [{ environmentId: selected.environmentId, label: organisationLabel(selected.environmentId, selected.label) }]
-    : environments.map((e) => ({ environmentId: e.environmentId, label: organisationLabel(e.environmentId, e.label) }));
+    ? [
+        {
+          environmentId: selected.environmentId,
+          label: organisationLabel(selected.environmentId, selected.label),
+        },
+      ]
+    : environments.map((e) => ({
+        environmentId: e.environmentId,
+        label: organisationLabel(e.environmentId, e.label),
+      }));
   if (targets.length === 0) return null;
   return (
     <SettingsSection id="chief-inbox" title="Inbox">
       {targets.map((target) => (
-        <ClickUpRows key={target.environmentId} environmentId={target.environmentId} label={target.label} />
+        <ClickUpRows
+          key={target.environmentId}
+          environmentId={target.environmentId}
+          label={target.label}
+        />
       ))}
     </SettingsSection>
   );
@@ -58,7 +70,12 @@ function ClickUpRows({ environmentId, label }: { environmentId: EnvironmentId; l
     setSaving(true);
     setError(null);
     try {
-      setConfig(await inboxRequest<InboxConfig>(base, path, { method, ...(body !== undefined ? { body } : {}) }));
+      setConfig(
+        await inboxRequest<InboxConfig>(base, path, {
+          method,
+          ...(body !== undefined ? { body } : {}),
+        }),
+      );
       setToken("");
       setReplacing(false);
       void refreshInbox(environmentId);
@@ -91,7 +108,15 @@ function ClickUpRows({ environmentId, label }: { environmentId: EnvironmentId; l
           showTokenInput ? (
             <>
               Paste a personal API token: your avatar in ClickUp, Settings, Apps.{" "}
-              <InlineButton render={<a href="https://app.clickup.com/settings/apps" target="_blank" rel="noreferrer noopener" />}>
+              <InlineButton
+                render={
+                  <a
+                    href="https://app.clickup.com/settings/apps"
+                    target="_blank"
+                    rel="noreferrer noopener"
+                  />
+                }
+              >
                 Open ClickUp
                 <ExternalLinkIcon aria-hidden className="size-3" />
               </InlineButton>
@@ -100,7 +125,13 @@ function ClickUpRows({ environmentId, label }: { environmentId: EnvironmentId; l
             "Direct messages, messages that tag you and tasks assigned to you land in the Inbox with a drafted reply. Nothing is sent until you press Send."
           )
         }
-        status={<span className={error || (config?.last_error && !connected) ? "text-destructive" : undefined}>{status}</span>}
+        status={
+          <span
+            className={error || (config?.last_error && !connected) ? "text-destructive" : undefined}
+          >
+            {status}
+          </span>
+        }
         control={
           unreachable ? null : showTokenInput ? (
             <form
@@ -131,10 +162,20 @@ function ClickUpRows({ environmentId, label }: { environmentId: EnvironmentId; l
             </form>
           ) : (
             <>
-              <Button size="sm" variant="ghost" disabled={saving} onClick={() => setReplacing(true)}>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={saving}
+                onClick={() => setReplacing(true)}
+              >
                 Replace token
               </Button>
-              <Button size="sm" variant="outline" disabled={saving} onClick={() => void call("/config/clickup", "DELETE")}>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={saving}
+                onClick={() => void call("/config/clickup", "DELETE")}
+              >
                 Disconnect
               </Button>
             </>
@@ -151,12 +192,15 @@ function ClickUpRows({ environmentId, label }: { environmentId: EnvironmentId; l
                 value={config.team_id ?? ""}
                 disabled={saving || config.workspaces.length < 2}
                 onValueChange={(value) => {
-                  if (typeof value === "string" && value && value !== config.team_id) void call("/config", "PUT", { clickup_team_id: value });
+                  if (typeof value === "string" && value && value !== config.team_id)
+                    void call("/config", "PUT", { clickup_team_id: value });
                 }}
               >
                 <SelectTrigger size="sm" className="w-full sm:w-56" aria-label="ClickUp workspace">
                   <SelectValue>
-                    {config.workspaces.find((w) => w.id === config.team_id)?.name ?? config.team_id ?? "Choose a workspace"}
+                    {config.workspaces.find((w) => w.id === config.team_id)?.name ??
+                      config.team_id ??
+                      "Choose a workspace"}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectPopup align="end" alignItemWithTrigger={false}>
@@ -177,15 +221,26 @@ function ClickUpRows({ environmentId, label }: { environmentId: EnvironmentId; l
 }
 
 function WatchedChannelsRow({
-  base, watched, onChange,
-}: { base: string; watched: ReadonlyArray<string>; onChange: () => Promise<void> }) {
-  const [channels, setChannels] = useState<ReadonlyArray<{ id: string; name: string }> | null>(null);
+  base,
+  watched,
+  onChange,
+}: {
+  base: string;
+  watched: ReadonlyArray<string>;
+  onChange: () => Promise<void>;
+}) {
+  const [channels, setChannels] = useState<ReadonlyArray<{ id: string; name: string }> | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<ReadonlyArray<string>>(watched);
   useEffect(() => setSelected(watched), [watched]);
   const loadChannels = useCallback(async () => {
     try {
-      const data = await inboxRequest<{ channels: { id: string; name: string }[] }>(base, "/config/channels");
+      const data = await inboxRequest<{ channels: { id: string; name: string }[] }>(
+        base,
+        "/config/channels",
+      );
       setChannels(data.channels);
       setError(null);
     } catch (e) {
@@ -220,7 +275,9 @@ function WatchedChannelsRow({
       }
       control={
         <Menu onOpenChange={(open) => (open ? void loadChannels() : undefined)}>
-          <MenuTrigger render={<Button size="sm" variant="outline" className="w-full sm:w-auto" />}>Choose channels</MenuTrigger>
+          <MenuTrigger render={<Button size="sm" variant="outline" className="w-full sm:w-auto" />}>
+            Choose channels
+          </MenuTrigger>
           <MenuPopup align="end" className="max-h-80">
             {channels === null ? (
               <MenuItem disabled>Loading the channels you follow</MenuItem>
@@ -228,7 +285,11 @@ function WatchedChannelsRow({
               <MenuItem disabled>You follow no channels</MenuItem>
             ) : (
               channels.map((c) => (
-                <MenuCheckboxItem key={c.id} checked={selected.includes(c.id)} onCheckedChange={(on) => void toggle(c.id, on)}>
+                <MenuCheckboxItem
+                  key={c.id}
+                  checked={selected.includes(c.id)}
+                  onCheckedChange={(on) => void toggle(c.id, on)}
+                >
                   #{c.name}
                 </MenuCheckboxItem>
               ))

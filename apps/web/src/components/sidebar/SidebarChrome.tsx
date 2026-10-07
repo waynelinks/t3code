@@ -1,4 +1,10 @@
-import { ArrowLeftIcon, ChartNoAxesColumnIcon, ChevronsUpDownIcon, InboxIcon, SettingsIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  ChartNoAxesColumnIcon,
+  ChevronsUpDownIcon,
+  InboxIcon,
+  SettingsIcon,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { memo, useCallback, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
@@ -101,30 +107,32 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
   return (
     <div className="relative z-10 ml-[var(--workspace-titlebar-content-left)] flex min-w-0 items-center gap-1.5">
       <Link
-      aria-label="Go to threads"
-      className={cn(
-        "relative z-10 hidden h-7 w-fit shrink-0 items-center rounded-md outline-hidden ring-ring focus-visible:ring-2 md:flex",
-        onBackdrop ? "text-white" : "text-foreground",
-      )}
-      to="/"
-    >
-      {/* Center the visible capitals, without the font's ascender/descender space. */}
-      <span className="inline-flex min-w-0 items-baseline gap-1 text-sm font-medium tracking-tight">
-        {APP_IS_REBRANDED ? (
-          <ChiefMark aria-label={APP_BASE_NAME} className="size-5 shrink-0 self-center" />
-        ) : null}
-        {APP_IS_REBRANDED ? null : <T3Wordmark aria-label="T3" className="h-[1cap] w-auto shrink-0" />}
-        {APP_IS_REBRANDED ? null : (
-          <span
-            className={cn(
-              "truncate [text-box:trim-both_cap_alphabetic]",
-              onBackdrop ? "text-white/70" : "text-muted-foreground",
-            )}
-          >
-            Code
-          </span>
+        aria-label="Go to threads"
+        className={cn(
+          "relative z-10 hidden h-7 w-fit shrink-0 items-center rounded-md outline-hidden ring-ring focus-visible:ring-2 md:flex",
+          onBackdrop ? "text-white" : "text-foreground",
         )}
-      </span>
+        to="/"
+      >
+        {/* Center the visible capitals, without the font's ascender/descender space. */}
+        <span className="inline-flex min-w-0 items-baseline gap-1 text-sm font-medium tracking-tight">
+          {APP_IS_REBRANDED ? (
+            <ChiefMark aria-label={APP_BASE_NAME} className="size-5 shrink-0 self-center" />
+          ) : null}
+          {APP_IS_REBRANDED ? null : (
+            <T3Wordmark aria-label="T3" className="h-[1cap] w-auto shrink-0" />
+          )}
+          {APP_IS_REBRANDED ? null : (
+            <span
+              className={cn(
+                "truncate [text-box:trim-both_cap_alphabetic]",
+                onBackdrop ? "text-white/70" : "text-muted-foreground",
+              )}
+            >
+              Code
+            </span>
+          )}
+        </span>
       </Link>
       <OrganisationSwitcher onBackdrop={onBackdrop} />
     </div>
@@ -140,7 +148,8 @@ function OrganisationSwitcher({ onBackdrop }: { onBackdrop: boolean }) {
   const navigate = useNavigate();
   const scope = useOrganisationScope();
   const nameOf = useOrganisationLabel();
-  const selected = scope === "all" ? null : (environments.find((e) => e.environmentId === scope) ?? null);
+  const selected =
+    scope === "all" ? null : (environments.find((e) => e.environmentId === scope) ?? null);
   const known = scope === "all" || selected !== null;
   useEffect(() => {
     if (!known && environments.length > 0) setOrganisationScope("all");
@@ -171,11 +180,19 @@ function OrganisationSwitcher({ onBackdrop }: { onBackdrop: boolean }) {
             }}
           >
             {environments.map((environment) => (
-              <MenuRadioItem key={environment.environmentId} value={environment.environmentId} closeOnClick>
+              <MenuRadioItem
+                key={environment.environmentId}
+                value={environment.environmentId}
+                closeOnClick
+              >
                 <span className="flex min-w-0 flex-col">
-                  <span className="truncate">{nameOf(environment.environmentId, environment.label)}</span>
+                  <span className="truncate">
+                    {nameOf(environment.environmentId, environment.label)}
+                  </span>
                   {environment.displayUrl ? (
-                    <span className="truncate text-xs text-muted-foreground">{environment.displayUrl}</span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {environment.displayUrl}
+                    </span>
                   ) : null}
                 </span>
               </MenuRadioItem>
@@ -208,11 +225,13 @@ function SidebarUtilityItem({
   icon,
   label,
   badge = 0,
+  active = false,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
   badge?: number;
+  active?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -224,6 +243,8 @@ function SidebarUtilityItem({
               aria-label={badge > 0 ? `${label} (${badge})` : label}
               onClick={onClick}
               size="icon"
+              isActive={active}
+              aria-current={active ? "page" : undefined}
               className={badge > 0 ? "relative" : undefined}
             >
               {/* The icon stays a direct child: the button sizes only direct child svgs. */}
@@ -249,11 +270,15 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   const isOnUtilityPage = useLocation({
     select: (location) => isSidebarUtilityPage(location.pathname),
   });
+  const isOnInbox = useLocation({ select: (location) => location.pathname === "/inbox" });
   const { environments } = useEnvironments();
   const inboxFeeds = useInboxFeeds();
   const organisationScope = useOrganisationScope();
   const inboxCount = inboxFeeds.reduce(
-    (sum, feed) => (inOrganisationScope(organisationScope, feed.environmentId) ? sum + feed.items.length : sum),
+    (sum, feed) =>
+      inOrganisationScope(organisationScope, feed.environmentId)
+        ? sum + feed.items.filter((item) => item.status === "open").length
+        : sum,
     0,
   );
   // The page reads every connected server, so one of them offering pull requests is enough for
@@ -314,6 +339,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             icon={<InboxIcon />}
             label="Inbox"
             badge={inboxCount}
+            active={isOnInbox}
             onClick={handleInboxClick}
           />
           {pullRequestsSupported ? (
