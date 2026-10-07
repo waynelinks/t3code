@@ -64,7 +64,55 @@ export interface InboxConfig {
   readonly last_error: string | null;
   readonly last_poll_at: string | null;
 }
+/** A ClickUp task assigned to the owner, as the inbox service returns it. */
+export interface TaskStatus {
+  readonly status: string;
+  readonly color: string;
+  readonly type: string;
+  readonly orderindex: number;
+}
+export interface MyTask {
+  readonly id: string;
+  readonly name: string;
+  readonly url: string | null;
+  readonly status: TaskStatus;
+  readonly list: { readonly id: string; readonly name: string };
+  readonly folder: string | null;
+  readonly due_date: number | null;
+  readonly start_date: number | null;
+  readonly priority: { readonly priority: string; readonly color: string } | null;
+  readonly tags: ReadonlyArray<{ readonly name: string; readonly fg: string; readonly bg: string }>;
+  readonly date_updated: number;
+  readonly parent: string | null;
+  readonly snoozed_until: string | null;
+}
+export interface MyTasksSummary {
+  readonly count: number;
+  readonly overdue: number;
+  readonly due_today: number;
+  readonly checked_at: string | null;
+  readonly error: string | null;
+}
+export interface MyTasksBody extends MyTasksSummary {
+  readonly tasks: ReadonlyArray<MyTask>;
+  readonly statuses_by_list: Readonly<Record<string, ReadonlyArray<TaskStatus>>>;
+}
+export interface MyTaskDetail {
+  readonly task: MyTask;
+  readonly description: string;
+  readonly creator: { readonly name: string; readonly picture: string | null } | null;
+  readonly comments: ReadonlyArray<{
+    readonly id: string;
+    readonly who: string;
+    readonly who_avatar: string | null;
+    readonly at: string;
+    readonly text: string;
+    readonly replies: number;
+  }>;
+}
+
 export interface InboxHealth {
+  readonly mytasks?: MyTasksSummary;
   readonly configured: boolean;
   readonly last_error: string | null;
   readonly last_poll_at: string | null;

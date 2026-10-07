@@ -8,7 +8,6 @@ import {
   InboxIcon,
   ListChecksIcon,
   RefreshCwIcon,
-  SearchIcon,
   SendIcon,
   SparklesIcon,
   UndoIcon,
@@ -44,13 +43,12 @@ import {
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
-import { SidebarInput } from "../ui/sidebar";
 import { Spinner } from "../ui/spinner";
 import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
+import { Avatar, IconAction, SearchField, timeAgo } from "./shared";
 
 interface Row extends InboxItem {
   readonly environmentId: EnvironmentId;
@@ -86,15 +84,6 @@ const TASK_LABEL: Record<string, string> = {
 };
 const SHORTCUTS = "Arrow keys move · E done · S snooze · R reply · Ctrl+Enter sends";
 
-function timeAgo(iso: string): string {
-  const seconds = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
-  if (seconds < 60) return "now";
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 48) return `${hours}h`;
-  return `${Math.round(hours / 24)}d`;
-}
 function fullDate(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
     day: "numeric",
@@ -102,17 +91,6 @@ function fullDate(iso: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-function initials(name: string): string {
-  const parts = name
-    .replace(/[^\p{L}\p{N} ]/gu, " ")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  if (parts.length === 0) return "?";
-  return (
-    (parts[0]?.[0] ?? "") + (parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "")
-  ).toUpperCase();
 }
 function signature(row: InboxItem): string {
   let h = 0;
@@ -130,19 +108,6 @@ function readSeen(): Record<string, string> {
   }
 }
 
-const AVATAR_TINTS = [
-  "bg-sky-500/15 text-sky-700 dark:text-sky-300",
-  "bg-violet-500/15 text-violet-700 dark:text-violet-300",
-  "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-  "bg-rose-500/15 text-rose-700 dark:text-rose-300",
-  "bg-teal-500/15 text-teal-700 dark:text-teal-300",
-];
-function tintFor(name: string): string {
-  let h = 0;
-  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) | 0;
-  return AVATAR_TINTS[Math.abs(h) % AVATAR_TINTS.length] ?? "bg-muted text-foreground/80";
-}
 function dayLabel(iso: string): string {
   const d = new Date(iso);
   const today = new Date();
@@ -152,74 +117,6 @@ function dayLabel(iso: string): string {
   if (days === 1) return "Yesterday";
   if (days < 7) return d.toLocaleDateString(undefined, { weekday: "long" });
   return d.toLocaleDateString(undefined, { day: "numeric", month: "long" });
-}
-
-function Avatar({
-  name,
-  src,
-  className,
-}: {
-  name: string;
-  src?: string | null | undefined;
-  className?: string;
-}) {
-  const [failed, setFailed] = useState(false);
-  if (src && !failed) {
-    return (
-      <img
-        src={src}
-        alt=""
-        aria-hidden
-        loading="lazy"
-        referrerPolicy="no-referrer"
-        onError={() => setFailed(true)}
-        className={cn("size-8 shrink-0 rounded-full bg-muted object-cover", className)}
-      />
-    );
-  }
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-medium",
-        tintFor(name),
-        className,
-      )}
-    >
-      {initials(name)}
-    </span>
-  );
-}
-
-function IconAction({
-  label,
-  onClick,
-  disabled,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-  children: ReactElement;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            size="icon-sm"
-            variant="outline"
-            aria-label={label}
-            disabled={disabled}
-            onClick={onClick}
-          />
-        }
-      >
-        {children}
-      </TooltipTrigger>
-      <TooltipPopup side="bottom">{label}</TooltipPopup>
-    </Tooltip>
-  );
 }
 
 export function InboxPage() {
@@ -439,18 +336,7 @@ export function InboxPage() {
           )}
         >
           <div className="flex flex-col gap-2 p-3">
-            <div className="flex h-8 min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground">
-              <SearchIcon className="size-4 shrink-0 text-(--sidebar-icon-color)" />
-              <SidebarInput
-                nativeInput
-                type="search"
-                placeholder="Search"
-                aria-label="Search the inbox"
-                value={query}
-                onChange={(event) => setQuery(event.currentTarget.value)}
-                className="min-w-0 flex-1"
-              />
-            </div>
+            <SearchField label="Search the inbox" value={query} onChange={setQuery} />
             <ToggleGroup
               aria-label="Inbox view"
               variant="segmented"

@@ -3,6 +3,7 @@ import {
   ChartNoAxesColumnIcon,
   ChevronsUpDownIcon,
   InboxIcon,
+  ListTodoIcon,
   SettingsIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -271,6 +272,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     select: (location) => isSidebarUtilityPage(location.pathname),
   });
   const isOnInbox = useLocation({ select: (location) => location.pathname === "/inbox" });
+  const isOnTasks = useLocation({ select: (location) => location.pathname === "/tasks" });
   const { environments } = useEnvironments();
   const inboxFeeds = useInboxFeeds();
   const organisationScope = useOrganisationScope();
@@ -278,6 +280,13 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     (sum, feed) =>
       inOrganisationScope(organisationScope, feed.environmentId)
         ? sum + feed.items.filter((item) => item.status === "open").length
+        : sum,
+    0,
+  );
+  const overdueTasks = inboxFeeds.reduce(
+    (sum, feed) =>
+      inOrganisationScope(organisationScope, feed.environmentId)
+        ? sum + (feed.health?.mytasks?.overdue ?? 0)
         : sum,
     0,
   );
@@ -305,6 +314,10 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   const handleInboxClick = useCallback(() => {
     closeMobileSidebar();
     void navigate({ to: "/inbox" });
+  }, [closeMobileSidebar, navigate]);
+  const handleTasksClick = useCallback(() => {
+    closeMobileSidebar();
+    void navigate({ to: "/tasks" });
   }, [closeMobileSidebar, navigate]);
 
   const handleUsageClick = useCallback(() => {
@@ -341,6 +354,13 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             badge={inboxCount}
             active={isOnInbox}
             onClick={handleInboxClick}
+          />
+          <SidebarUtilityItem
+            icon={<ListTodoIcon />}
+            label="My tasks"
+            badge={overdueTasks}
+            active={isOnTasks}
+            onClick={handleTasksClick}
           />
           {pullRequestsSupported ? (
             <SidebarUtilityItem
