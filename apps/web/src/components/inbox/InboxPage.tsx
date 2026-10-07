@@ -160,7 +160,7 @@ function Avatar({
   className,
 }: {
   name: string;
-  src?: string | null;
+  src?: string | null | undefined;
   className?: string;
 }) {
   const [failed, setFailed] = useState(false);
