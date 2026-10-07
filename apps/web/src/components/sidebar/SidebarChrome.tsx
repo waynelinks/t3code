@@ -7,7 +7,6 @@ import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
 import { useEnvironments } from "../../state/environments";
 import { useInboxFeeds } from "../../state/inbox";
-import { InboxFeeds } from "../inbox/InboxFeeds";
 import {
   type OrganisationScope,
   inOrganisationScope,
@@ -335,7 +334,6 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
 export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   return (
     <SidebarFooter>
-      <InboxFeeds />
       <SidebarThreadUndoNotice />
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
