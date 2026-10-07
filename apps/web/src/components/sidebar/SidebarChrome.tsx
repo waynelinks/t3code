@@ -24,6 +24,7 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "../ui/menu";
+import { ChiefMark } from "../ChiefMark";
 import { T3Wordmark } from "../T3Wordmark";
 import { APP_BASE_NAME, APP_IS_REBRANDED } from "../../branding";
 import {
@@ -108,7 +109,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
       {/* Center the visible capitals, without the font's ascender/descender space. */}
       <span className="inline-flex min-w-0 items-baseline gap-1 text-sm font-medium tracking-tight">
         {APP_IS_REBRANDED ? (
-          <span className="shrink-0 whitespace-nowrap [text-box:trim-both_cap_alphabetic]">{APP_BASE_NAME}</span>
+          <ChiefMark aria-label={APP_BASE_NAME} className="size-5 shrink-0 self-center" />
         ) : null}
         {APP_IS_REBRANDED ? null : <T3Wordmark aria-label="T3" className="h-[1cap] w-auto shrink-0" />}
         {APP_IS_REBRANDED ? null : (
