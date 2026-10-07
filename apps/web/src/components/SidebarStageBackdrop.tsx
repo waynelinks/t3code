@@ -1,7 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import { useId } from "react";
 
-import { APP_STAGE_LABEL } from "../branding";
+import { APP_IS_REBRANDED, APP_STAGE_LABEL } from "../branding";
 import { resolveServerBackedAppStageLabel } from "../branding.logic";
 import { primaryServerConfigAtom } from "../state/server";
 
@@ -43,7 +43,9 @@ export function useEnvironmentStageLabel(): string {
 }
 
 export function useSidebarStageBackdropVariant(enabled = true): SidebarStageBackdropVariant | null {
-  return resolveSidebarStageBackdropVariant(useEnvironmentStageLabel(), enabled);
+  const variant = resolveSidebarStageBackdropVariant(useEnvironmentStageLabel(), enabled);
+  // A rebranded build has no release stage to signal; keep the night-sky header art when artwork is on.
+  return variant ?? (enabled && APP_IS_REBRANDED ? "nightly" : null);
 }
 
 /** Stage-channel header art; palettes mirror the per-channel app icons in `assets/`. */
