@@ -37,21 +37,12 @@ const manifest = (): ModelManifestData => ({
                 type: "select",
                 options: [{ id: "extreme", label: "Extreme", isDefault: true }],
               },
-              {
-                id: "contextWindow",
-                label: "Context Window",
-                type: "select",
-                options: [
-                  { id: "large", label: "Large", isDefault: true },
-                  { id: "small", label: "Small" },
-                ],
-              },
             ],
           },
           adapter: {
             claudeCode: {
               effortMap: { extreme: "high" },
-              modelSuffixes: { contextWindow: { large: "[large]" } },
+              modelSuffix: "[large]",
             },
           },
         },
@@ -71,7 +62,7 @@ const manifest = (): ModelManifestData => ({
 });
 
 describe("Claude model catalog", () => {
-  it("resolves capacity from selected options and fixed catalog windows without guessing custom models", () => {
+  it("resolves fixed catalog windows without guessing custom models", () => {
     const source = manifest();
     const profile = source.providers!.claudeAgent!.profiles.synthetic!;
     const catalog = resolveClaudeModelCatalog({
@@ -86,7 +77,7 @@ describe("Claude model catalog", () => {
             },
             synthetic: {
               ...profile,
-              adapter: { claudeCode: { contextWindowTokens: { large: 1_000_000, small: 32_000 } } },
+              adapter: { claudeCode: { fixedContextWindowTokens: 1_000_000 } },
             },
           },
           models: [
@@ -106,9 +97,9 @@ describe("Claude model catalog", () => {
     assert.equal(
       resolveClaudeCatalogContextWindowTokens(catalog, {
         ...selection,
-        options: [{ id: "contextWindow", value: "small" }],
+        options: [{ id: "contextWindow", value: "200k" }],
       }),
-      32_000,
+      1_000_000,
     );
     assert.equal(
       resolveClaudeCatalogContextWindowTokens(catalog, { ...selection, model: "fixed" }),

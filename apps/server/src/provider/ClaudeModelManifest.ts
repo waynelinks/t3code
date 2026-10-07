@@ -7,13 +7,8 @@ export const ClaudeCodeProfileSchema = Schema.Struct({
   effortMap: Schema.optional(
     Schema.Record(TrimmedNonEmptyString, Schema.NullOr(TrimmedNonEmptyString)),
   ),
-  modelSuffixes: Schema.optional(
-    Schema.Record(
-      TrimmedNonEmptyString,
-      Schema.Record(TrimmedNonEmptyString, TrimmedNonEmptyString),
-    ),
-  ),
-  contextWindowTokens: Schema.optional(Schema.Record(TrimmedNonEmptyString, Schema.Number)),
+  /** Appended to the slug when Claude Code needs it to run `fixedContextWindowTokens`. */
+  modelSuffix: Schema.optional(TrimmedNonEmptyString),
   fixedContextWindowTokens: Schema.optional(Schema.Number),
 });
 

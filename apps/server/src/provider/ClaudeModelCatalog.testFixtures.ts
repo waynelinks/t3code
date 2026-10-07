@@ -20,20 +20,10 @@ const effort = {
   promptInjectedValues: ["ultrathink"],
 };
 
-const contextWindow = {
-  id: "contextWindow",
-  label: "Context Window",
-  type: "select" as const,
-  options: [
-    { id: "standard", label: "Standard" },
-    { id: "expanded", label: "Expanded", isDefault: true },
-  ],
-};
-
 const runtime = {
   effortMap: { ultrathink: null },
-  modelSuffixes: { contextWindow: { expanded: "[expanded]" } },
-  contextWindowTokens: { standard: 200_000, expanded: 1_000_000 },
+  modelSuffix: "[expanded]",
+  fixedContextWindowTokens: 1_000_000,
 };
 
 export const SYNTHETIC_CLAUDE_MODEL_CATALOG: ClaudeModelCatalog = {
@@ -45,11 +35,7 @@ export const SYNTHETIC_CLAUDE_MODEL_CATALOG: ClaudeModelCatalog = {
         aliases: [SYNTHETIC_CLAUDE_COLLIDING_ALIAS],
         isCustom: false,
         capabilities: {
-          optionDescriptors: [
-            effort,
-            { id: "fastMode", label: "Fast Mode", type: "boolean" },
-            contextWindow,
-          ],
+          optionDescriptors: [effort, { id: "fastMode", label: "Fast Mode", type: "boolean" }],
         },
       },
       runtime,
@@ -61,7 +47,7 @@ export const SYNTHETIC_CLAUDE_MODEL_CATALOG: ClaudeModelCatalog = {
         name: "Claude Synthetic Standard",
         isCustom: false,
         capabilities: {
-          optionDescriptors: [effort, contextWindow],
+          optionDescriptors: [effort],
         },
       },
       runtime,

@@ -7,7 +7,6 @@ import {
 } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import {
-  getModelSelectionStringOptionValue,
   getProviderOptionCurrentValue,
   getProviderOptionDescriptors,
   readCustomModelEntries,
@@ -215,47 +214,19 @@ export function isClaudeCatalogUltracodeEffort(effort: string | null | undefined
   return effort === "ultracode";
 }
 
-export function resolveClaudeCatalogContextWindow(
-  catalog: ClaudeModelCatalog,
-  modelSelection: ModelSelection | undefined,
-): string | undefined {
-  const caps = getClaudeCatalogModelCapabilities(catalog, modelSelection?.model);
-  const raw = getModelSelectionStringOptionValue(modelSelection, "contextWindow");
-  const descriptors = getProviderOptionDescriptors({
-    caps,
-    ...(raw ? { selections: [{ id: "contextWindow", value: raw }] } : {}),
-  });
-  const descriptor = descriptors.find((candidate) => candidate.id === "contextWindow");
-  const value = getProviderOptionCurrentValue(descriptor);
-  return typeof value === "string" ? value : undefined;
-}
-
 export function resolveClaudeCatalogApiModelId(
   catalog: ClaudeModelCatalog,
   modelSelection: ModelSelection,
 ): string {
   const entry = resolveClaudeCatalogModel(catalog, modelSelection.model);
   const slug = entry?.model.slug ?? modelSelection.model;
-  const descriptors = getProviderOptionDescriptors({
-    caps: entry?.model.capabilities ?? EMPTY_CAPABILITIES,
-    selections: modelSelection.options,
-  });
-  for (const [optionId, suffixes] of Object.entries(entry?.runtime.modelSuffixes ?? {})) {
-    const value = getProviderOptionCurrentValue(
-      descriptors.find((descriptor) => descriptor.id === optionId),
-    );
-    if (typeof value === "string" && suffixes[value]) return `${slug}${suffixes[value]}`;
-  }
-  return slug;
+  return `${slug}${entry?.runtime.modelSuffix ?? ""}`;
 }
 
 export function resolveClaudeCatalogContextWindowTokens(
   catalog: ClaudeModelCatalog,
   modelSelection: ModelSelection | undefined,
 ): number | undefined {
-  const entry = resolveClaudeCatalogModel(catalog, modelSelection?.model);
-  if (!entry) return undefined;
-  if (entry.runtime.fixedContextWindowTokens) return entry.runtime.fixedContextWindowTokens;
-  const contextWindow = resolveClaudeCatalogContextWindow(catalog, modelSelection);
-  return contextWindow ? entry.runtime.contextWindowTokens?.[contextWindow] : undefined;
+  return resolveClaudeCatalogModel(catalog, modelSelection?.model)?.runtime
+    .fixedContextWindowTokens;
 }

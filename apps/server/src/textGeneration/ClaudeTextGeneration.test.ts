@@ -255,7 +255,6 @@ it.layer(layerClaudeTextGenerationTest)("ClaudeTextGeneration", (it) => {
               [
                 { id: "effort", value: "max" },
                 { id: "fastMode", value: true },
-                { id: "contextWindow", value: "expanded" },
               ],
             ),
           });

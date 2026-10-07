@@ -14,16 +14,16 @@ const selection = (
 });
 
 describe("compileClaudeModelSelection", () => {
-  it("compiles context, effort, and settings together", () => {
+  it("compiles effort and settings together and ignores a saved context window", () => {
     expect(
       compileClaudeModelSelection(
         selection("claude-fable-5", [
-          { id: "contextWindow", value: "1m" },
+          { id: "contextWindow", value: "200k" },
           { id: "effort", value: "ultracode" },
         ]),
       ),
     ).toMatchObject({
-      apiModelId: "claude-fable-5[1m]",
+      apiModelId: "claude-fable-5",
       effort: "xhigh",
       settings: { ultracode: true },
     });
