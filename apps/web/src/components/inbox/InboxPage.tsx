@@ -308,7 +308,7 @@ function TaskPanel({ row, busy, onAct, onRetry }: { row: Row; busy: boolean; onA
       body = (
         <>
           <p className="text-sm">Spec ready, with {task.acceptance_cases ?? 0} acceptance checks. Nothing is built until you approve.</p>
-          {task.spec ? <pre className="max-h-72 overflow-y-auto rounded-lg border border-border bg-background p-3 font-sans text-sm whitespace-pre-wrap">{task.spec}</pre> : null}
+          {task.spec ? <div className="max-h-72 overflow-y-auto rounded-lg border border-border bg-background p-3 text-sm whitespace-pre-wrap">{task.spec}</div> : null}
         </>
       );
       actions = (
@@ -348,7 +348,7 @@ function TaskPanel({ row, busy, onAct, onRetry }: { row: Row; busy: boolean; onA
       body = (
         <>
           <p className="text-sm">The build stopped and needs you.</p>
-          {task.reasons ? <pre className="max-h-48 overflow-y-auto rounded-lg border border-border bg-background p-3 font-sans text-xs whitespace-pre-wrap">{task.reasons}</pre> : null}
+          {task.reasons ? <div className="max-h-48 overflow-y-auto rounded-lg border border-border bg-background p-3 text-xs whitespace-pre-wrap">{task.reasons}</div> : null}
         </>
       );
       actions = <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onAct(row, "discard")}>Discard</Button>;
