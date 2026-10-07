@@ -1,4 +1,6 @@
 {
+  "name": "Chief",
+  "short_name": "Chief",
   "id": "/",
   "start_url": "/",
   "scope": "/",
