@@ -8,7 +8,10 @@ import type {
 } from "@t3tools/contracts";
 import * as Arr from "effect/Array";
 import * as Result from "effect/Result";
-import { detectSourceControlProviderFromRemoteUrl } from "./sourceControl.ts";
+import {
+  canonicalSshRemoteHost,
+  detectSourceControlProviderFromRemoteUrl,
+} from "./sourceControl.ts";
 
 export const WORKTREE_BRANCH_PREFIX = "t3code";
 // Canonical form is `t3code/<8 hex>`. Older mobile builds generated `t3code/<uuid>`
@@ -141,10 +144,12 @@ export function normalizeGitRemoteUrl(value: string): string {
     try {
       const url = new URL(normalized);
       const repositorySegments = url.pathname.split("/").filter((segment) => segment.length > 0);
-      if (url.hostname && repositorySegments.length > 1) {
+      const hostname =
+        url.protocol === "ssh:" ? canonicalSshRemoteHost(url.hostname) : url.hostname;
+      if (hostname && repositorySegments.length > 1) {
         return (
-          azureDevOpsRepositoryKey(url.hostname, repositorySegments) ??
-          `${url.hostname}/${repositorySegments.join("/")}`
+          azureDevOpsRepositoryKey(hostname, repositorySegments) ??
+          `${hostname}/${repositorySegments.join("/")}`
         );
       }
     } catch {
@@ -155,7 +160,9 @@ export function normalizeGitRemoteUrl(value: string): string {
   const scpStyleHostAndPath = /^[a-zA-Z0-9._-]+@([^:/\s]+):([^/\s]+(?:\/[^/\s]+)+)$/i.exec(
     normalized,
   );
-  const scpHost = scpStyleHostAndPath?.[1];
+  const scpHost = scpStyleHostAndPath?.[1]
+    ? canonicalSshRemoteHost(scpStyleHostAndPath[1])
+    : undefined;
   const scpPath = scpStyleHostAndPath?.[2];
   if (scpHost && scpPath) {
     return azureDevOpsRepositoryKey(scpHost, scpPath.split("/")) ?? `${scpHost}/${scpPath}`;

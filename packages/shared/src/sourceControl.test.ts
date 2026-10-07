@@ -44,6 +44,28 @@ describe("source control presentation", () => {
 });
 
 describe("detectSourceControlProviderFromRemoteUrl", () => {
+  it("treats an SSH alias for github.com as github.com", () => {
+    expect(detectSourceControlProviderFromRemoteUrl("git@github.com-work:acme/portal.git")).toEqual(
+      {
+        kind: "github",
+        name: "GitHub",
+        baseUrl: "https://github.com",
+      },
+    );
+    expect(
+      detectSourceControlProviderFromRemoteUrl("ssh://git@github.com-personal/acme/portal.git")
+        ?.baseUrl,
+    ).toBe("https://github.com");
+    // a real self-hosted server keeps its own host
+    expect(
+      detectSourceControlProviderFromRemoteUrl("git@github.acme.example:acme/portal.git")?.baseUrl,
+    ).toBe("https://github.acme.example");
+    // only SSH remotes carry SSH aliases
+    expect(
+      detectSourceControlProviderFromRemoteUrl("https://github.com-work/acme/portal")?.baseUrl,
+    ).toBe("https://github.com-work");
+  });
+
   it("detects common source control hosts", () => {
     expect(detectSourceControlProviderFromRemoteUrl("git@github.com:owner/repo.git")?.kind).toBe(
       "github",

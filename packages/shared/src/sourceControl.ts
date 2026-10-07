@@ -141,6 +141,17 @@ export function getChangeRequestTerminologyForKind(
 
 const SCP_SSH_REMOTE_PATTERN = /^[a-zA-Z0-9._-]+@([^:/]+):/;
 
+/**
+ * Chief: an SSH remote can name a host alias from ~/.ssh/config that stands for github.com, the usual
+ * way to keep two GitHub accounts apart (`git@github.com-work:org/repo`). The alias only picks the SSH
+ * key; the forge is github.com, and its CLI login, API and web links live there.
+ */
+const GITHUB_SSH_HOST_ALIAS = /^github\.com[-_][a-z0-9_-]+$/i;
+
+export function canonicalSshRemoteHost(host: string): string {
+  return GITHUB_SSH_HOST_ALIAS.test(host) ? "github.com" : host;
+}
+
 export function isSshRemoteUrl(remoteUrl: string): boolean {
   const trimmed = remoteUrl.trim();
   return SCP_SSH_REMOTE_PATTERN.test(trimmed) || trimmed.toLowerCase().startsWith("ssh://");
@@ -158,12 +169,14 @@ function parseRemoteHost(remoteUrl: string): string | null {
 
   const scpMatch = SCP_SSH_REMOTE_PATTERN.exec(trimmed);
   if (scpMatch?.[1]) {
-    return scpMatch[1].toLowerCase();
+    return canonicalSshRemoteHost(scpMatch[1].toLowerCase());
   }
 
   try {
     const url = new URL(trimmed);
-    return (url.protocol === "ssh:" ? url.hostname : url.host).toLowerCase();
+    return url.protocol === "ssh:"
+      ? canonicalSshRemoteHost(url.hostname.toLowerCase())
+      : url.host.toLowerCase();
   } catch {
     return null;
   }

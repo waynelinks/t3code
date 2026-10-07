@@ -274,3 +274,15 @@ describe("applyGitStatusStreamEvent", () => {
     });
   });
 });
+
+describe("normalizeGitRemoteUrl with SSH aliases", () => {
+  it("keys an SSH alias for github.com the same as github.com", () => {
+    expect(normalizeGitRemoteUrl("git@github.com-work:Acme/Portal.git")).toBe(
+      "github.com/acme/portal",
+    );
+    expect(normalizeGitRemoteUrl("ssh://git@github.com-work/acme/portal.git")).toBe(
+      "github.com/acme/portal",
+    );
+    expect(normalizeGitRemoteUrl("https://github.com/acme/portal")).toBe("github.com/acme/portal");
+  });
+});
