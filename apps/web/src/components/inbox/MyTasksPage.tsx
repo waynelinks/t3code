@@ -4,6 +4,7 @@ import {
   CalendarIcon,
   ClockIcon,
   ExternalLinkIcon,
+  FilterIcon,
   FlagIcon,
   KanbanIcon,
   ListIcon,
@@ -24,6 +25,7 @@ import {
   type KeyboardEvent,
 } from "react";
 
+import ChatMarkdown from "../ChatMarkdown";
 import { cn } from "../../lib/utils";
 import { useEnvironments } from "../../state/environments";
 import {
@@ -42,6 +44,7 @@ import {
 } from "../../state/organisation";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import { Menu, MenuCheckboxItem, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Spinner } from "../ui/spinner";
 import { Textarea } from "../ui/textarea";
@@ -59,6 +62,7 @@ interface TaskRow extends MyTask {
 }
 type View = "list" | "board";
 const VIEW_KEY = "chief_mytasks_view";
+const FILTERS_KEY = "chief_mytasks_filters";
 const REFRESH_MS = 60_000;
 
 function readView(): View {
@@ -68,7 +72,6 @@ function readView(): View {
     return "list";
   }
 }
-const isClosed = (s: TaskStatus) => s.type === "closed" || s.type === "done";
 
 function startOfDay(offsetDays = 0): number {
   const d = new Date();
@@ -91,19 +94,58 @@ function dueText(due: number | null): string | null {
   if (due === null) return null;
   if (due < Date.now()) {
     const days = Math.floor((startOfDay() - due) / 86_400_000) + 1;
-    return due >= startOfDay()
-      ? "Due earlier today"
-      : days <= 1
-        ? "1 day overdue"
-        : `${days} days overdue`;
+    return due >= startOfDay() ? "Overdue" : days <= 1 ? "1 day overdue" : `${days} days overdue`;
   }
   if (due < startOfDay(1)) return "Today";
   if (due < startOfDay(2)) return "Tomorrow";
   return new Date(due).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 const STATUS_RANK: Record<string, number> = { open: 0, custom: 1, done: 2, closed: 3 };
+const PRIORITY_ORDER = ["urgent", "high", "normal", "low", "none"];
 
-function StatusDot({ status, className }: { status: TaskStatus; className?: string }) {
+interface Filters {
+  readonly statuses: ReadonlyArray<string>;
+  readonly lists: ReadonlyArray<string>;
+  readonly priorities: ReadonlyArray<string>;
+  readonly tags: ReadonlyArray<string>;
+}
+const NO_FILTERS: Filters = { statuses: [], lists: [], priorities: [], tags: [] };
+function readFilters(): Filters {
+  try {
+    const raw = JSON.parse(
+      window.localStorage.getItem(FILTERS_KEY) ?? "null",
+    ) as Partial<Filters> | null;
+    const list = (v: unknown) =>
+      Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+    return raw
+      ? {
+          statuses: list(raw.statuses),
+          lists: list(raw.lists),
+          priorities: list(raw.priorities),
+          tags: list(raw.tags),
+        }
+      : NO_FILTERS;
+  } catch {
+    return NO_FILTERS;
+  }
+}
+const priorityKey = (task: MyTask) => (task.priority?.priority || "none").toLowerCase();
+function matchesFilters(task: MyTask, f: Filters): boolean {
+  if (f.statuses.length > 0 && !f.statuses.includes(task.status.status.toLowerCase())) return false;
+  if (f.lists.length > 0 && !f.lists.includes(task.list.id)) return false;
+  if (f.priorities.length > 0 && !f.priorities.includes(priorityKey(task))) return false;
+  if (f.tags.length > 0 && !task.tags.some((t) => f.tags.includes(t.name.toLowerCase())))
+    return false;
+  return true;
+}
+
+function StatusDot({
+  status,
+  className,
+}: {
+  status: Pick<TaskStatus, "color">;
+  className?: string;
+}) {
   return (
     <span
       aria-hidden
@@ -148,6 +190,149 @@ function Tags({ tags, max = 3 }: { tags: MyTask["tags"]; max?: number }) {
   );
 }
 
+/** One filter: a button that opens a checklist of the values present, with counts. */
+function FilterMenu({
+  label,
+  options,
+  selected,
+  onChange,
+}: {
+  label: string;
+  options: ReadonlyArray<{
+    value: string;
+    label: string;
+    count: number;
+    color?: string | undefined;
+  }>;
+  selected: ReadonlyArray<string>;
+  onChange: (next: string[]) => void;
+}) {
+  const active = selected.filter((v) => options.some((o) => o.value === v)).length;
+  return (
+    <Menu>
+      <MenuTrigger render={<Button size="xs" variant={active > 0 ? "secondary" : "ghost"} />}>
+        {label}
+        {active > 0 ? <span className="text-muted-foreground">· {active}</span> : null}
+      </MenuTrigger>
+      <MenuPopup align="start" className="max-h-80">
+        {options.length === 0 ? (
+          <MenuItem disabled>Nothing to filter</MenuItem>
+        ) : (
+          options.map((o) => (
+            <MenuCheckboxItem
+              key={o.value}
+              checked={selected.includes(o.value)}
+              onCheckedChange={(on) =>
+                onChange(on ? [...selected, o.value] : selected.filter((v) => v !== o.value))
+              }
+            >
+              <span className="flex w-full min-w-0 items-center gap-2">
+                {o.color !== undefined ? <StatusDot status={{ color: o.color }} /> : null}
+                <span className="truncate capitalize">{o.label}</span>
+                <span className="ml-auto pl-3 text-xs text-muted-foreground">{o.count}</span>
+              </span>
+            </MenuCheckboxItem>
+          ))
+        )}
+      </MenuPopup>
+    </Menu>
+  );
+}
+
+function FilterBar({
+  rows,
+  filters,
+  onChange,
+}: {
+  rows: ReadonlyArray<TaskRow>;
+  filters: Filters;
+  onChange: (next: Filters) => void;
+}) {
+  const tally = (keys: string[]) => {
+    const m = new Map<string, number>();
+    for (const k of keys) m.set(k, (m.get(k) ?? 0) + 1);
+    return m;
+  };
+  const statusCounts = tally(rows.map((r) => r.status.status.toLowerCase()));
+  const statuses = [
+    ...new Map(rows.map((r) => [r.status.status.toLowerCase(), r.status] as const)).values(),
+  ]
+    .sort(
+      (a, b) =>
+        (STATUS_RANK[a.type] ?? 1) - (STATUS_RANK[b.type] ?? 1) || a.orderindex - b.orderindex,
+    )
+    .map((s) => ({
+      value: s.status.toLowerCase(),
+      label: s.status,
+      count: statusCounts.get(s.status.toLowerCase()) ?? 0,
+      color: s.color,
+    }));
+  const listCounts = tally(rows.map((r) => r.list.id));
+  const lists = [...new Map(rows.map((r) => [r.list.id, r] as const)).values()]
+    .map((r) => ({
+      value: r.list.id,
+      label: r.folder ? `${r.folder} › ${r.list.name}` : r.list.name,
+      count: listCounts.get(r.list.id) ?? 0,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const priorityCounts = tally(rows.map(priorityKey));
+  const priorities = PRIORITY_ORDER.filter((p) => priorityCounts.has(p)).map((p) => ({
+    value: p,
+    label: p === "none" ? "No priority" : p,
+    count: priorityCounts.get(p) ?? 0,
+    color: rows.find((r) => priorityKey(r) === p)?.priority?.color ?? "",
+  }));
+  const tagCounts = tally(rows.flatMap((r) => r.tags.map((t) => t.name.toLowerCase())));
+  const tags = [...tagCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([t, n]) => ({ value: t, label: t, count: n }));
+  const any =
+    filters.statuses.length +
+      filters.lists.length +
+      filters.priorities.length +
+      filters.tags.length >
+    0;
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      <FilterIcon className="mr-1 size-3.5 text-muted-foreground" />
+      <FilterMenu
+        label="Status"
+        options={statuses}
+        selected={filters.statuses}
+        onChange={(v) => onChange({ ...filters, statuses: v })}
+      />
+      <FilterMenu
+        label="List"
+        options={lists}
+        selected={filters.lists}
+        onChange={(v) => onChange({ ...filters, lists: v })}
+      />
+      <FilterMenu
+        label="Priority"
+        options={priorities}
+        selected={filters.priorities}
+        onChange={(v) => onChange({ ...filters, priorities: v })}
+      />
+      <FilterMenu
+        label="Tag"
+        options={tags}
+        selected={filters.tags}
+        onChange={(v) => onChange({ ...filters, tags: v })}
+      />
+      {any ? (
+        <Button
+          size="xs"
+          variant="ghost"
+          className="text-muted-foreground"
+          onClick={() => onChange(NO_FILTERS)}
+        >
+          Clear
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 export function MyTasksPage() {
   const feeds = useInboxFeeds();
   const scope = useOrganisationScope();
@@ -172,7 +357,7 @@ export function MyTasksPage() {
   const sourceKey = sources.map((s) => `${s.environmentId}@${s.base}`).join("|");
   const [data, setData] = useState<Record<string, MyTasksBody>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [loaded, setLoaded] = useState(false);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const sourcesRef = useRef(sources);
   sourcesRef.current = sources;
@@ -202,7 +387,7 @@ export function MyTasksPage() {
     setErrors(
       Object.fromEntries(results.filter(([, , err]) => err).map(([id, , err]) => [id, err!])),
     );
-    setLoaded(true);
+    setLoadedKey(current.map((s) => `${s.environmentId}@${s.base}`).join("|"));
   }, []);
   useEffect(() => {
     void load();
@@ -250,15 +435,23 @@ export function MyTasksPage() {
     } catch {}
   };
   const [query, setQuery] = useState("");
+  const [filters, setFiltersState] = useState<Filters>(() => readFilters());
+  const setFilters = (next: Filters) => {
+    setFiltersState(next);
+    try {
+      window.localStorage.setItem(FILTERS_KEY, JSON.stringify(next));
+    } catch {}
+  };
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const matched = q
-      ? rows.filter((r) =>
+    const matched = rows.filter(
+      (r) =>
+        matchesFilters(r, filters) &&
+        (!q ||
           `${r.name} ${r.list.name} ${r.folder ?? ""} ${r.status.status} ${r.tags.map((t) => t.name).join(" ")}`
             .toLowerCase()
-            .includes(q),
-        )
-      : rows;
+            .includes(q)),
+    );
     return [...matched].sort((a, b) => {
       const ba = bucketOf(a).order - bucketOf(b).order;
       if (ba !== 0) return ba;
@@ -267,7 +460,7 @@ export function MyTasksPage() {
         b.date_updated - a.date_updated
       );
     });
-  }, [rows, query]);
+  }, [rows, query, filters]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const selected = rows.find((r) => r.key === selectedKey) ?? null;
 
@@ -394,11 +587,20 @@ export function MyTasksPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const notConnected = feeds.filter(
-    (feed) =>
-      inOrganisationScope(scope, feed.environmentId) && (feed.error || !feed.health?.configured),
+  const inScopeFeeds = feeds.filter((f) => inOrganisationScope(scope, f.environmentId));
+  const notConnected = inScopeFeeds.filter((feed) => feed.error || !feed.health?.configured);
+  // loading until the inbox connection is ready, and until this set of sources has loaded once
+  const feedsPending =
+    environments.filter((e) => inOrganisationScope(scope, e.environmentId)).length >
+    inScopeFeeds.length;
+  const loading = feedsPending || (sources.length > 0 && loadedKey !== sourceKey);
+  const filtered = visible.length < rows.length;
+  const notices = (
+    <Notices
+      notConnected={feedsPending ? [] : notConnected.map((f) => labelFor(f.environmentId))}
+      errors={Object.entries(errors).map(([id, err]) => `${labelFor(id as EnvironmentId)}: ${err}`)}
+    />
   );
-  const loading = !loaded && sources.length > 0;
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
@@ -407,6 +609,11 @@ export function MyTasksPage() {
         <span className="truncate text-sm text-muted-foreground">
           {scope === "all" ? "All organisations" : labelFor(scope)}
         </span>
+        {!loading ? (
+          <Badge variant="secondary" size="sm">
+            {filtered ? `${visible.length} of ${rows.length}` : rows.length}
+          </Badge>
+        ) : null}
         <div className="min-w-0 flex-1" />
         {lastChecked ? (
           <span className="hidden text-xs text-muted-foreground sm:inline">
@@ -444,15 +651,11 @@ export function MyTasksPage() {
               selected ? "hidden" : "flex",
             )}
           >
-            <div className="p-3">
+            <div className="flex flex-col gap-1.5 p-3">
               <SearchField label="Search my tasks" value={query} onChange={setQuery} />
+              <FilterBar rows={rows} filters={filters} onChange={setFilters} />
             </div>
-            <Notices
-              notConnected={notConnected.map((f) => labelFor(f.environmentId))}
-              errors={Object.entries(errors).map(
-                ([id, err]) => `${labelFor(id as EnvironmentId)}: ${err}`,
-              )}
-            />
+            {notices}
             <ul className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-3">
               {loading ? (
                 <li className="flex items-center justify-center gap-2 px-3 py-10 text-sm text-muted-foreground">
@@ -461,7 +664,9 @@ export function MyTasksPage() {
                 </li>
               ) : visible.length === 0 ? (
                 <li className="px-3 py-10 text-center text-sm text-muted-foreground">
-                  {query ? "Nothing matches." : "No open tasks assigned to you."}
+                  {query || filtered
+                    ? "Nothing matches the search or filters."
+                    : "No open tasks assigned to you."}
                 </li>
               ) : (
                 visible.map((row, index) => {
@@ -499,17 +704,13 @@ export function MyTasksPage() {
           <div
             className={cn("min-h-0 min-w-0 flex-1 flex-col", selected ? "hidden lg:flex" : "flex")}
           >
-            <div className="flex items-center gap-3 px-4 pt-3">
+            <div className="flex flex-wrap items-center gap-3 px-4 pt-3">
               <div className="w-full max-w-xs">
                 <SearchField label="Search my tasks" value={query} onChange={setQuery} />
               </div>
+              <FilterBar rows={rows} filters={filters} onChange={setFilters} />
             </div>
-            <Notices
-              notConnected={notConnected.map((f) => labelFor(f.environmentId))}
-              errors={Object.entries(errors).map(
-                ([id, err]) => `${labelFor(id as EnvironmentId)}: ${err}`,
-              )}
-            />
+            {notices}
             {loading ? (
               <p className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
                 <Spinner className="size-3.5" />
@@ -676,7 +877,7 @@ function Board({
   if (rows.length === 0)
     return (
       <p className="py-10 text-center text-sm text-muted-foreground">
-        No open tasks assigned to you.
+        Nothing matches the search or filters.
       </p>
     );
   return (
@@ -699,14 +900,7 @@ function Board({
             )}
           >
             <header className="flex items-center gap-2 border-b border-border/50 px-3 py-2.5">
-              <StatusDot
-                status={{
-                  status: column.name,
-                  color: column.color,
-                  type: column.type,
-                  orderindex: column.order,
-                }}
-              />
+              <StatusDot status={column} />
               <span className="truncate text-xs font-medium tracking-wide uppercase">
                 {column.name}
               </span>
@@ -759,6 +953,9 @@ function Board({
   );
 }
 
+/** Opened tasks, so reopening one shows it at once while the service refreshes it. */
+const detailCache = new Map<string, MyTaskDetail>();
+
 function TaskDetail({
   row,
   showOrganisation,
@@ -772,21 +969,24 @@ function TaskDetail({
   onStatus: (name: string) => void;
   onSnooze: (on: boolean) => void;
 }) {
-  const [detail, setDetail] = useState<MyTaskDetail | null>(null);
+  const [detail, setDetail] = useState<MyTaskDetail | null>(() => detailCache.get(row.key) ?? null);
   const [error, setError] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [sending, setSending] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    setDetail(null);
+    setDetail(detailCache.get(row.key) ?? null);
     setError(null);
     inboxRequest<MyTaskDetail>(row.base, `/mytasks/${encodeURIComponent(row.id)}`)
-      .then((d) => !cancelled && setDetail(d))
+      .then((d) => {
+        detailCache.set(row.key, d);
+        if (!cancelled) setDetail(d);
+      })
       .catch((e) => !cancelled && setError(e instanceof Error ? e.message : String(e)));
     return () => {
       cancelled = true;
     };
-  }, [row.base, row.id]);
+  }, [row.base, row.id, row.key]);
   const send = async () => {
     const text = comment.trim();
     if (!text || sending) return;
@@ -797,6 +997,7 @@ function TaskDetail({
         `/mytasks/${encodeURIComponent(row.id)}/comment`,
         { method: "POST", body: { text } },
       );
+      detailCache.set(row.key, d);
       setDetail(d);
       setComment("");
     } catch (e) {
@@ -909,13 +1110,17 @@ function TaskDetail({
         ) : null}
         {detail ? (
           <>
-            <div className="text-sm leading-relaxed whitespace-pre-wrap">
-              {detail.description.trim() ? (
-                detail.description
-              ) : (
-                <span className="text-muted-foreground">No description.</span>
-              )}
-            </div>
+            {detail.description.trim() ? (
+              <ChatMarkdown
+                text={detail.description}
+                cwd={undefined}
+                environmentId={row.environmentId}
+                lineBreaks
+                className="text-sm"
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">No description.</p>
+            )}
             <div className="flex flex-col gap-3">
               <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                 Comments
