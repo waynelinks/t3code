@@ -1,4 +1,4 @@
-import { ArrowLeftIcon, ChartNoAxesColumnIcon, ChevronsUpDownIcon, SettingsIcon } from "lucide-react";
+import { ArrowLeftIcon, ChartNoAxesColumnIcon, ChevronsUpDownIcon, InboxIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo, useCallback, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
@@ -6,8 +6,11 @@ import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
 import { useEnvironments } from "../../state/environments";
+import { useInboxFeeds } from "../../state/inbox";
+import { InboxFeeds } from "../inbox/InboxFeeds";
 import {
   type OrganisationScope,
+  inOrganisationScope,
   renameOrganisation,
   setOrganisationScope,
   useOrganisationNames,
@@ -206,10 +209,12 @@ function OrganisationSwitcher({ onBackdrop }: { onBackdrop: boolean }) {
 function SidebarUtilityItem({
   icon,
   label,
+  badge = 0,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
+  badge?: number;
   onClick: () => void;
 }) {
   return (
@@ -217,8 +222,15 @@ function SidebarUtilityItem({
       <Tooltip>
         <TooltipTrigger
           render={
-            <SidebarMenuButton aria-label={label} onClick={onClick} size="icon">
-              {icon}
+            <SidebarMenuButton aria-label={badge > 0 ? `${label} (${badge})` : label} onClick={onClick} size="icon">
+              <span className="relative flex items-center justify-center">
+                {icon}
+                {badge > 0 ? (
+                  <span className="absolute -top-2 -right-2.5 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] leading-4 font-medium text-primary-foreground">
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                ) : null}
+              </span>
             </SidebarMenuButton>
           }
         />
@@ -236,6 +248,12 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     select: (location) => isSidebarUtilityPage(location.pathname),
   });
   const { environments } = useEnvironments();
+  const inboxFeeds = useInboxFeeds();
+  const organisationScope = useOrganisationScope();
+  const inboxCount = inboxFeeds.reduce(
+    (sum, feed) => (inOrganisationScope(organisationScope, feed.environmentId) ? sum + feed.items.length : sum),
+    0,
+  );
   // The page reads every connected server, so one of them offering pull requests is enough for
   // the link to lead somewhere.
   const pullRequestsSupported = environments.some(
@@ -256,6 +274,10 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   const handleSettingsClick = useCallback(() => {
     closeMobileSidebar();
     void navigate({ to: "/settings" });
+  }, [closeMobileSidebar, navigate]);
+  const handleInboxClick = useCallback(() => {
+    closeMobileSidebar();
+    void navigate({ to: "/inbox" });
   }, [closeMobileSidebar, navigate]);
 
   const handleUsageClick = useCallback(() => {
@@ -286,6 +308,12 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             label="Settings"
             onClick={handleSettingsClick}
           />
+          <SidebarUtilityItem
+            icon={<InboxIcon />}
+            label="Inbox"
+            badge={inboxCount}
+            onClick={handleInboxClick}
+          />
           {pullRequestsSupported ? (
             <SidebarUtilityItem
               icon={<PullRequestGlyph.pullRequest />}
@@ -308,6 +336,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
 export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   return (
     <SidebarFooter>
+      <InboxFeeds />
       <SidebarThreadUndoNotice />
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
