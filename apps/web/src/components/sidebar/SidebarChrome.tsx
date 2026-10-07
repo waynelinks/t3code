@@ -220,15 +220,19 @@ function SidebarUtilityItem({
       <Tooltip>
         <TooltipTrigger
           render={
-            <SidebarMenuButton aria-label={badge > 0 ? `${label} (${badge})` : label} onClick={onClick} size="icon">
-              <span className="relative flex items-center justify-center">
-                {icon}
-                {badge > 0 ? (
-                  <span className="absolute -top-2 -right-2.5 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] leading-4 font-medium text-primary-foreground">
-                    {badge > 99 ? "99+" : badge}
-                  </span>
-                ) : null}
-              </span>
+            <SidebarMenuButton
+              aria-label={badge > 0 ? `${label} (${badge})` : label}
+              onClick={onClick}
+              size="icon"
+              className={badge > 0 ? "relative" : undefined}
+            >
+              {/* The icon stays a direct child: the button sizes only direct child svgs. */}
+              {icon}
+              {badge > 0 ? (
+                <span className="pointer-events-none absolute top-0.5 right-0.5 min-w-3.5 rounded-full bg-primary px-0.5 text-center text-[9px] leading-3.5 font-semibold text-primary-foreground">
+                  {badge > 99 ? "99+" : badge}
+                </span>
+              ) : null}
             </SidebarMenuButton>
           }
         />
