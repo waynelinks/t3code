@@ -125,7 +125,7 @@ function FeedNotice({ feed, label }: { feed: EnvironmentInbox; label: string }) 
   if (feed.health && !feed.health.configured) {
     return (
       <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-        {label}: ClickUp is not connected yet. The steps are in OWNER-INBOX.md.
+        {label}: ClickUp is not connected yet. Connect it under Settings, Integrations, Inbox.
       </p>
     );
   }
