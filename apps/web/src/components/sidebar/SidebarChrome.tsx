@@ -100,7 +100,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
       <Link
       aria-label="Go to threads"
       className={cn(
-        "relative z-10 hidden h-7 w-fit min-w-0 shrink-0 items-center overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2 md:flex",
+        "relative z-10 hidden h-7 w-fit shrink-0 items-center rounded-md outline-hidden ring-ring focus-visible:ring-2 md:flex",
         onBackdrop ? "text-white" : "text-foreground",
       )}
       to="/"
@@ -149,7 +149,7 @@ function OrganisationSwitcher({ onBackdrop }: { onBackdrop: boolean }) {
       <MenuTrigger
         aria-label="Switch organisation"
         className={cn(
-          "inline-flex h-7 min-w-0 items-center gap-1 rounded-md px-1.5 text-sm font-medium tracking-tight outline-hidden hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring",
+          "inline-flex h-7 min-w-0 shrink items-center gap-1 rounded-md px-1.5 text-sm font-medium tracking-tight outline-hidden hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring",
           onBackdrop ? "text-white" : "text-foreground",
         )}
       >
@@ -165,7 +165,12 @@ function OrganisationSwitcher({ onBackdrop }: { onBackdrop: boolean }) {
           >
             {environments.map((environment) => (
               <MenuRadioItem key={environment.environmentId} value={environment.environmentId} closeOnClick>
-                {nameOf(environment.environmentId, environment.label)}
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate">{nameOf(environment.environmentId, environment.label)}</span>
+                  {environment.displayUrl ? (
+                    <span className="truncate text-xs text-muted-foreground">{environment.displayUrl}</span>
+                  ) : null}
+                </span>
               </MenuRadioItem>
             ))}
             <MenuRadioItem value="all" closeOnClick>
