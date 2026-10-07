@@ -28,6 +28,8 @@ export interface InboxItem {
   readonly updated_at?: string;
   readonly snooze_until?: string | null;
   readonly who: string;
+  /** The sender's ClickUp profile picture, when they have one. */
+  readonly who_avatar?: string | null;
   readonly title: string;
   readonly body: string;
   readonly url: string | null;
@@ -35,7 +37,9 @@ export interface InboxItem {
   readonly context: Record<string, unknown>;
   readonly draft: InboxDraft;
   readonly reply: { readonly sent_at: string; readonly text: string } | null;
-  readonly reply_to?: { readonly kind: "task-comment" | "channel" | "thread" } | null;
+  readonly reply_to?: {
+    readonly kind: "task-comment" | "comment-thread" | "channel" | "thread";
+  } | null;
   readonly task?: InboxTask | null;
 }
 /** A chief-task started from (or found by) the inbox: spec, approval, run, draft pull request. */

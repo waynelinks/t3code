@@ -154,7 +154,29 @@ function dayLabel(iso: string): string {
   return d.toLocaleDateString(undefined, { day: "numeric", month: "long" });
 }
 
-function Avatar({ name, className }: { name: string; className?: string }) {
+function Avatar({
+  name,
+  src,
+  className,
+}: {
+  name: string;
+  src?: string | null;
+  className?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (src && !failed) {
+    return (
+      <img
+        src={src}
+        alt=""
+        aria-hidden
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
+        className={cn("size-8 shrink-0 rounded-full bg-muted object-cover", className)}
+      />
+    );
+  }
   return (
     <span
       aria-hidden
@@ -569,7 +591,11 @@ function ListItem({
         )}
       >
         <span className="flex w-full items-center gap-2">
-          <Avatar name={row.who || row.source} className="size-6 text-[10px]" />
+          <Avatar
+            name={row.who || row.source}
+            src={row.who_avatar}
+            className="size-6 text-[10px]"
+          />
           <span className="min-w-0 truncate text-xs text-muted-foreground">
             <span className="font-medium text-foreground/80">{row.who || row.source}</span>
             {" · "}
@@ -659,7 +685,7 @@ function Detail({
         >
           <ArrowLeftIcon className="size-4" />
         </Button>
-        <Avatar name={row.who || row.source} className="size-9 text-sm" />
+        <Avatar name={row.who || row.source} src={row.who_avatar} className="size-9 text-sm" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{row.who || row.source}</p>
           <p className="truncate text-xs text-muted-foreground" title={subtitle}>
@@ -778,7 +804,7 @@ function Composer({ row, busy, onAct }: { row: Row; busy: boolean; onAct: Act })
   const target =
     row.reply_to?.kind === "channel"
       ? "the conversation"
-      : row.reply_to?.kind === "thread"
+      : row.reply_to?.kind === "thread" || row.reply_to?.kind === "comment-thread"
         ? "the thread"
         : "the task comments";
   return (
@@ -786,7 +812,7 @@ function Composer({ row, busy, onAct }: { row: Row; busy: boolean; onAct: Act })
       <div className="flex flex-wrap items-center gap-2 border-b border-border/50 px-4 py-2.5 text-sm">
         <span className="text-muted-foreground">To:</span>
         <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 py-0.5 pr-2.5 pl-0.5">
-          <Avatar name={row.who || row.source} className="size-5 text-[9px]" />
+          <Avatar name={row.who || row.source} src={row.who_avatar} className="size-5 text-[9px]" />
           <span className="text-xs font-medium">{row.who || row.source}</span>
         </span>
         <span className="text-xs text-muted-foreground">in {target}</span>
