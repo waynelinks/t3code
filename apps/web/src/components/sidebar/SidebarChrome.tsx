@@ -1,11 +1,29 @@
-import { ArrowLeftIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
+import { ArrowLeftIcon, ChartNoAxesColumnIcon, ChevronsUpDownIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { memo, useCallback } from "react";
+import { memo, useCallback, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
 import { useEnvironments } from "../../state/environments";
+import {
+  type OrganisationScope,
+  renameOrganisation,
+  setOrganisationScope,
+  useOrganisationNames,
+  useOrganisationScope,
+} from "../../state/organisation";
+import {
+  Menu,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuSeparator,
+  MenuTrigger,
+} from "../ui/menu";
 import { T3Wordmark } from "../T3Wordmark";
 import { APP_BASE_NAME, APP_IS_REBRANDED } from "../../branding";
 import {
@@ -78,10 +96,11 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
 
 function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
   return (
-    <Link
+    <div className="relative z-10 ml-[var(--workspace-titlebar-content-left)] flex min-w-0 items-center gap-1.5">
+      <Link
       aria-label="Go to threads"
       className={cn(
-        "relative z-10 ml-[var(--workspace-titlebar-content-left)] hidden h-7 w-fit min-w-0 shrink-0 items-center overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2 md:flex",
+        "relative z-10 hidden h-7 w-fit min-w-0 shrink-0 items-center overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2 md:flex",
         onBackdrop ? "text-white" : "text-foreground",
       )}
       to="/"
@@ -103,7 +122,73 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
           </span>
         )}
       </span>
-    </Link>
+      </Link>
+      <OrganisationSwitcher onBackdrop={onBackdrop} />
+    </div>
+  );
+}
+
+/**
+ * Chief: the organisation at the top. One connected environment per company, so picking one scopes
+ * projects, threads and new threads to that company; "All organisations" is the merged view.
+ */
+function OrganisationSwitcher({ onBackdrop }: { onBackdrop: boolean }) {
+  const { environments } = useEnvironments();
+  const scope = useOrganisationScope();
+  const names = useOrganisationNames();
+  const selected = scope === "all" ? null : (environments.find((e) => e.environmentId === scope) ?? null);
+  const known = scope === "all" || selected !== null;
+  useEffect(() => {
+    if (!known && environments.length > 0) setOrganisationScope("all");
+  }, [known, environments.length]);
+  if (environments.length < 2) return null;
+  const nameOf = (environmentId: string, fallback: string) => names[environmentId] ?? fallback;
+  const current = selected ? nameOf(selected.environmentId, selected.label) : "All organisations";
+  return (
+    <Menu>
+      <MenuTrigger
+        aria-label="Switch organisation"
+        className={cn(
+          "inline-flex h-7 min-w-0 items-center gap-1 rounded-md px-1.5 text-sm font-medium tracking-tight outline-hidden hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring",
+          onBackdrop ? "text-white" : "text-foreground",
+        )}
+      >
+        <span className="truncate">{current}</span>
+        <ChevronsUpDownIcon className="size-3.5 shrink-0 opacity-60" />
+      </MenuTrigger>
+      <MenuPopup>
+        <MenuGroup>
+          <MenuGroupLabel>Organisation</MenuGroupLabel>
+          <MenuRadioGroup
+            value={known ? scope : "all"}
+            onValueChange={(value) => setOrganisationScope(value as OrganisationScope)}
+          >
+            {environments.map((environment) => (
+              <MenuRadioItem key={environment.environmentId} value={environment.environmentId} closeOnClick>
+                {nameOf(environment.environmentId, environment.label)}
+              </MenuRadioItem>
+            ))}
+            <MenuRadioItem value="all" closeOnClick>
+              All organisations
+            </MenuRadioItem>
+          </MenuRadioGroup>
+        </MenuGroup>
+        <MenuSeparator />
+        <MenuItem
+          disabled={selected === null}
+          onClick={() => {
+            if (selected === null) return;
+            const next = window.prompt(
+              `Name for this organisation (${selected.label})`,
+              nameOf(selected.environmentId, selected.label),
+            );
+            if (next !== null) renameOrganisation(selected.environmentId, next);
+          }}
+        >
+          Rename this organisation
+        </MenuItem>
+      </MenuPopup>
+    </Menu>
   );
 }
 

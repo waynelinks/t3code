@@ -13,6 +13,7 @@ import type { EnvironmentId } from "@t3tools/contracts";
 import { Atom } from "effect/unstable/reactivity";
 import { useMemo } from "react";
 import { appAtomRegistry } from "../rpc/atomRegistry";
+import { inOrganisationScope, useOrganisationScope } from "./organisation";
 import { environmentProjects } from "./projects";
 import { environmentServerConfigsAtom } from "./server";
 import {
@@ -67,7 +68,15 @@ export function useEnvironmentThreadRefs(
 }
 
 export function useProjects(): ReadonlyArray<EnvironmentProject> {
-  return useAtomValue(environmentProjects.projectsAtom);
+  const projects = useAtomValue(environmentProjects.projectsAtom);
+  const scope = useOrganisationScope();
+  return useMemo(
+    () =>
+      scope === "all"
+        ? projects
+        : projects.filter((project) => inOrganisationScope(scope, project.environmentId)),
+    [projects, scope],
+  );
 }
 
 export function useServerConfigs(): ReadonlyMap<EnvironmentId, ServerConfig> {
@@ -75,7 +84,13 @@ export function useServerConfigs(): ReadonlyMap<EnvironmentId, ServerConfig> {
 }
 
 export function useThreadShells(): ReadonlyArray<EnvironmentThreadShell> {
-  return useAtomValue(environmentThreadShells.threadShellsAtom);
+  const shells = useAtomValue(environmentThreadShells.threadShellsAtom);
+  const scope = useOrganisationScope();
+  return useMemo(
+    () =>
+      scope === "all" ? shells : shells.filter((shell) => inOrganisationScope(scope, shell.environmentId)),
+    [shells, scope],
+  );
 }
 
 export function useAllEnvironmentShellsBootstrapped(): boolean {
