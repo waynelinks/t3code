@@ -358,10 +358,10 @@ export function InboxPage() {
           Refresh
         </Button>
       </WorkspacePageHeader>
-      <div className="flex min-h-0 flex-1 border-t border-border">
+      <div className="flex min-h-0 flex-1 border-t border-border/50">
         <aside
           className={cn(
-            "min-h-0 w-full shrink-0 flex-col border-r border-border md:flex md:w-[360px]",
+            "min-h-0 w-full shrink-0 flex-col border-r border-border/50 md:flex md:w-[360px]",
             selected ? "hidden" : "flex",
           )}
         >
@@ -469,7 +469,7 @@ function FeedNotice({ feed, label }: { feed: EnvironmentInbox; label: string }) 
         : null;
   if (!message) return null;
   return (
-    <p className="mx-3 mb-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+    <p className="mx-3 mb-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
       {message}
     </p>
   );
@@ -584,7 +584,7 @@ function Detail({
     .join(" · ");
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex shrink-0 items-center gap-3 border-b border-border px-5 py-3 lg:px-8">
+      <header className="flex shrink-0 items-center gap-3 border-b border-border/50 px-5 py-3 lg:px-8">
         <Button
           size="icon-sm"
           variant="ghost"
@@ -650,7 +650,7 @@ function Detail({
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5 lg:px-8">
         <h2 className="text-lg font-semibold tracking-tight">{row.title}</h2>
         {thread.length > 0 ? (
-          <div className="flex flex-col gap-2 border-l-2 border-border pl-3">
+          <div className="flex flex-col gap-2 border-l-2 border-border/50 pl-3">
             {thread.slice(-6).map((x, i) => (
               <div key={`${x.at ?? i}-${i}`} className="text-sm text-muted-foreground">
                 <span className="font-medium text-foreground/70">{x.who ?? "someone"}</span>
@@ -664,7 +664,7 @@ function Detail({
           <p className="text-sm leading-relaxed whitespace-pre-wrap">{row.body}</p>
         ) : null}
         {row.reply ? (
-          <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm">
+          <div className="rounded-xl border border-border/60 bg-muted/20 shadow-xs/5 p-4 text-sm">
             <p className="mb-1 text-xs text-muted-foreground">
               You replied {timeAgo(row.reply.sent_at)} ago
             </p>
@@ -717,10 +717,10 @@ function Composer({ row, busy, onAct }: { row: Row; busy: boolean; onAct: Act })
         ? "the thread"
         : "the task comments";
   return (
-    <div className="flex flex-col rounded-xl border border-border bg-card">
-      <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5 text-sm">
+    <div className="flex flex-col rounded-xl border border-border/60 bg-card/40 shadow-xs/5">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border/50 px-4 py-2.5 text-sm">
         <span className="text-muted-foreground">To:</span>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-border py-0.5 pr-2.5 pl-0.5">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 py-0.5 pr-2.5 pl-0.5">
           <Avatar name={row.who || row.source} className="size-5 text-[9px]" />
           <span className="text-xs font-medium">{row.who || row.source}</span>
         </span>
@@ -771,7 +771,7 @@ function Composer({ row, busy, onAct }: { row: Row; busy: boolean; onAct: Act })
           {row.draft.checked.slice(0, 6).map((path) => (
             <span
               key={path}
-              className="inline-flex max-w-64 items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5"
+              className="inline-flex max-w-64 items-center gap-2 rounded-lg border border-border/60 bg-background/60 px-2.5 py-1.5"
             >
               <FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
               <span className="flex min-w-0 flex-col">
@@ -782,7 +782,7 @@ function Composer({ row, busy, onAct }: { row: Row; busy: boolean; onAct: Act })
           ))}
         </div>
       ) : null}
-      <div className="flex items-center gap-2 border-t border-border px-3 py-2.5">
+      <div className="flex items-center gap-2 border-t border-border/50 px-3 py-2.5">
         <Button
           size="sm"
           variant="ghost"
@@ -852,8 +852,8 @@ function TaskComposer({
     if (!repo && repos[0]) setRepo(repos[0].path);
   }, [repo, repos]);
   return (
-    <div className="flex flex-col rounded-xl border border-border bg-card">
-      <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5 text-sm">
+    <div className="flex flex-col rounded-xl border border-border/60 bg-card/40 shadow-xs/5">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border/50 px-4 py-2.5 text-sm">
         <ListChecksIcon className="size-4 text-muted-foreground" />
         <span className="font-medium">New task</span>
         <span className="text-xs text-muted-foreground">
@@ -868,7 +868,7 @@ function TaskComposer({
         className="w-full resize-none bg-transparent px-4 py-3 text-sm leading-relaxed outline-none"
         onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setGoal(event.target.value)}
       />
-      <div className="flex flex-wrap items-center gap-2 border-t border-border px-3 py-2.5">
+      <div className="flex flex-wrap items-center gap-2 border-t border-border/50 px-3 py-2.5">
         {repos.length === 0 ? (
           <span className="text-xs text-muted-foreground">
             Add the repository as a project in Chief first.
@@ -942,7 +942,7 @@ function TaskPanel({
             you approve.
           </p>
           {task.spec ? (
-            <div className="max-h-80 overflow-y-auto rounded-lg border border-border bg-background p-3 text-sm whitespace-pre-wrap">
+            <div className="max-h-80 overflow-y-auto rounded-lg border border-border/60 bg-background/60 p-3 text-sm whitespace-pre-wrap">
               {task.spec}
             </div>
           ) : null}
@@ -1015,7 +1015,7 @@ function TaskPanel({
         <>
           <p className="text-sm">The build stopped and needs you.</p>
           {task.reasons ? (
-            <div className="max-h-48 overflow-y-auto rounded-lg border border-border bg-background p-3 text-xs whitespace-pre-wrap">
+            <div className="max-h-48 overflow-y-auto rounded-lg border border-border/60 bg-background/60 p-3 text-xs whitespace-pre-wrap">
               {task.reasons}
             </div>
           ) : null}
@@ -1036,8 +1036,8 @@ function TaskPanel({
       body = <p className="text-sm text-muted-foreground">Task status: {task.status}</p>;
   }
   return (
-    <div className="flex flex-col rounded-xl border border-border bg-card">
-      <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5 text-sm">
+    <div className="flex flex-col rounded-xl border border-border/60 bg-card/40 shadow-xs/5">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border/50 px-4 py-2.5 text-sm">
         <ListChecksIcon className="size-4 text-muted-foreground" />
         <span className="font-medium">{task.title || task.id}</span>
         <Badge variant="info" size="sm">
@@ -1046,7 +1046,7 @@ function TaskPanel({
       </div>
       <div className="flex flex-col gap-3 px-4 py-3">{body}</div>
       {actions ? (
-        <div className="flex items-center justify-end gap-2 border-t border-border px-3 py-2.5">
+        <div className="flex items-center justify-end gap-2 border-t border-border/50 px-3 py-2.5">
           {actions}
         </div>
       ) : null}
