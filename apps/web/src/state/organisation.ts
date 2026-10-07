@@ -1,5 +1,8 @@
+import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { useSyncExternalStore } from "react";
+
+import { primaryEnvironmentIdAtom } from "./primaryEnvironment";
 
 /**
  * Organisation scope: which connected environment the client shows, or "all".
@@ -31,9 +34,11 @@ function storage(): Storage | null {
   }
 }
 
-function readScope(): OrganisationScope {
+/** The remembered choice, or null when the person has never chosen. */
+function readStoredScope(): OrganisationScope | null {
   const value = storage()?.getItem(SCOPE_KEY);
-  return value && value !== "all" ? (value as EnvironmentId) : "all";
+  if (!value) return null;
+  return value === "all" ? "all" : (value as EnvironmentId);
 }
 
 let namesRaw: string | null | undefined;
@@ -79,8 +84,15 @@ export function inOrganisationScope(scope: OrganisationScope, environmentId: Env
   return scope === "all" || scope === environmentId;
 }
 
+/**
+ * The organisation in view. Until the person chooses, it is the environment that serves this window
+ * (the primary connection): Chief's console is served by the company's own server, so that company
+ * is the default. "all" is the merged view.
+ */
 export function useOrganisationScope(): OrganisationScope {
-  return useSyncExternalStore(subscribe, readScope, () => "all");
+  const stored = useSyncExternalStore(subscribe, readStoredScope, () => null);
+  const primary = useAtomValue(primaryEnvironmentIdAtom);
+  return stored ?? primary ?? "all";
 }
 
 export function useOrganisationNames(): Readonly<Record<string, string>> {
