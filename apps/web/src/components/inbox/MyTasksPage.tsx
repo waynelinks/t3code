@@ -10,6 +10,7 @@ import {
   ListIcon,
   ListTodoIcon,
   RefreshCwIcon,
+  ScanSearchIcon,
   SendIcon,
   XIcon,
 } from "lucide-react";
@@ -397,6 +398,7 @@ export function MyTasksPage() {
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const sourcesRef = useRef(sources);
+  const pendingRef = useRef(false);
   sourcesRef.current = sources;
   const load = useCallback(async (force = false) => {
     const current = sourcesRef.current;
@@ -429,7 +431,14 @@ export function MyTasksPage() {
   useEffect(() => {
     void load();
     const timer = setInterval(() => void load(), REFRESH_MS);
-    return () => clearInterval(timer);
+    // a quicker beat while code checks run, so results appear as they land
+    const quick = setInterval(() => {
+      if (pendingRef.current) void load();
+    }, 5_000);
+    return () => {
+      clearInterval(timer);
+      clearInterval(quick);
+    };
   }, [load, sourceKey]);
   const checkNow = useCallback(async () => {
     setChecking(true);
@@ -457,6 +466,7 @@ export function MyTasksPage() {
       }),
     [sources, data, labelFor],
   );
+  pendingRef.current = rows.some((r) => r.triage?.state === "pending");
   const lastChecked =
     Object.values(data)
       .map((b) => b.checked_at ?? "")
@@ -676,6 +686,11 @@ export function MyTasksPage() {
             <span className="hidden sm:inline">Board</span>
           </Toggle>
         </ToggleGroup>
+        <BatchTriage
+          rows={visible}
+          budget={Object.values(data)[0]?.triage_budget_usd ?? 0.75}
+          onData={(environmentId, body) => setData((prev) => ({ ...prev, [environmentId]: body }))}
+        />
         <Button variant="ghost" size="sm" disabled={checking} onClick={() => void checkNow()}>
           <RefreshCwIcon className={cn("size-4", checking && "animate-spin")} />
           {checking ? "Checking" : "Check now"}
@@ -783,6 +798,7 @@ export function MyTasksPage() {
               onClose={() => setSelectedKey(null)}
               onStatus={(name) => void setStatus(selected, name)}
               onSnooze={(on) => void snooze(selected, on)}
+              onData={(body) => setData((prev) => ({ ...prev, [selected.environmentId]: body }))}
             />
           ) : view === "list" ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -872,6 +888,7 @@ function TaskListItem({
           {showOrganisation ? <span>· {row.organisation}</span> : null}
           <PriorityFlag priority={row.priority} />
           <Tags tags={row.tags} max={2} />
+          <TriageBadge triage={row.triage} />
         </span>
       </button>
     </li>
@@ -991,6 +1008,295 @@ function Board({
   );
 }
 
+const VERDICT_LABEL: Record<string, string> = {
+  done: "Looks done",
+  obsolete: "Looks obsolete",
+  still_needed: "Still needed",
+  in_progress: "Partly done",
+  unclear: "Unclear from the code",
+};
+
+function TriageBadge({ triage }: { triage: MyTask["triage"] }) {
+  if (!triage) return null;
+  if (triage.state === "pending")
+    return (
+      <Badge variant="secondary" size="sm">
+        Checking the code
+      </Badge>
+    );
+  if (triage.state === "failed")
+    return (
+      <Badge variant="error" size="sm">
+        Check failed
+      </Badge>
+    );
+  if (triage.state === "applied") return null;
+  const label = triage.suggested_status
+    ? `Suggests: ${triage.suggested_status}`
+    : (VERDICT_LABEL[triage.verdict ?? ""] ?? "Checked");
+  return (
+    <Badge
+      variant={triage.verdict === "done" || triage.verdict === "obsolete" ? "success" : "info"}
+      size="sm"
+      className="capitalize"
+    >
+      {label}
+    </Badge>
+  );
+}
+
+/** Check the shown tasks against the code, after saying how many and the most it can cost. */
+function BatchTriage({
+  rows,
+  budget,
+  onData,
+}: {
+  rows: ReadonlyArray<TaskRow>;
+  budget: number;
+  onData: (environmentId: EnvironmentId, body: MyTasksBody) => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const todo = rows.filter((r) => !r.triage || r.triage.state === "failed");
+  if (todo.length === 0) return null;
+  const n = Math.min(todo.length, 200);
+  const start = async () => {
+    setBusy(true);
+    try {
+      const byEnv = new Map<EnvironmentId, { base: string; ids: string[] }>();
+      for (const r of todo.slice(0, 200)) {
+        const entry = byEnv.get(r.environmentId) ?? { base: r.base, ids: [] };
+        entry.ids.push(r.id);
+        byEnv.set(r.environmentId, entry);
+      }
+      for (const [environmentId, { base, ids }] of byEnv) {
+        onData(
+          environmentId,
+          await inboxRequest<MyTasksBody>(base, "/mytasks/triage", {
+            method: "POST",
+            body: { ids },
+          }),
+        );
+      }
+      toastManager.add({
+        type: "success",
+        title: `Checking ${n} ${n === 1 ? "task" : "tasks"} against the code`,
+        description: "Results appear on each task as they finish.",
+      });
+    } catch (e) {
+      toastManager.add({
+        type: "error",
+        title: "Could not start the checks",
+        description: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setBusy(false);
+      setConfirming(false);
+    }
+  };
+  if (!confirming) {
+    return (
+      <Button variant="ghost" size="sm" onClick={() => setConfirming(true)}>
+        <ScanSearchIcon className="size-4" />
+        Check {n} against the code
+      </Button>
+    );
+  }
+  return (
+    <span className="flex items-center gap-2 text-xs text-muted-foreground">
+      {n} {n === 1 ? "task" : "tasks"}, at most ${(n * budget).toFixed(2)}
+      <Button size="xs" disabled={busy} onClick={() => void start()}>
+        Start
+      </Button>
+      <Button size="xs" variant="ghost" disabled={busy} onClick={() => setConfirming(false)}>
+        Cancel
+      </Button>
+    </span>
+  );
+}
+
+/** The task-triager's recommendation, with the status and comment ready to apply. */
+function TriageCard({ row, onData }: { row: TaskRow; onData: (body: MyTasksBody) => void }) {
+  const t = row.triage ?? null;
+  const [status, setStatus] = useState(t?.suggested_status ?? "");
+  const [comment, setComment] = useState(t?.comment ?? "");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    setStatus(t?.suggested_status ?? "");
+    setComment(t?.comment ?? "");
+  }, [t?.at, t?.suggested_status, t?.comment]);
+  const call = async (path: string, method: string, body?: unknown) => {
+    setBusy(true);
+    try {
+      onData(
+        await inboxRequest<MyTasksBody>(
+          row.base,
+          `/mytasks/${encodeURIComponent(row.id)}/${path}`,
+          {
+            method,
+            ...(body !== undefined ? { body } : {}),
+          },
+        ),
+      );
+    } catch (e) {
+      toastManager.add({
+        type: "error",
+        title: "That did not work",
+        description: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!t) {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/40 px-4 py-3 shadow-xs/5">
+        <ScanSearchIcon className="size-4 shrink-0 text-muted-foreground" />
+        <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+          Not sure this is still relevant? An agent reads the code and the commit history and
+          suggests a status.
+        </p>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={busy}
+          onClick={() => void call("triage", "POST", {})}
+        >
+          Check against the code
+        </Button>
+      </div>
+    );
+  }
+  if (t.state === "pending") {
+    return (
+      <p className="flex items-center gap-2 rounded-xl border border-border/60 bg-card/40 px-4 py-3 text-sm text-muted-foreground shadow-xs/5">
+        <Spinner className="size-3.5" />
+        Checking the code and the commit history. This takes a minute or two.
+      </p>
+    );
+  }
+  if (t.state === "failed") {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/40 px-4 py-3 shadow-xs/5">
+        <p className="min-w-0 flex-1 text-xs text-destructive">The check failed: {t.error}</p>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={busy}
+          onClick={() => void call("triage", "POST", {})}
+        >
+          Try again
+        </Button>
+      </div>
+    );
+  }
+  if (t.state === "applied") {
+    return (
+      <div className="flex items-center justify-between gap-2 rounded-xl border border-border/60 bg-card/40 px-4 py-3 text-xs text-muted-foreground shadow-xs/5">
+        Recommendation applied {timeAgo(t.at)} ago.
+        <Button
+          size="xs"
+          variant="ghost"
+          disabled={busy}
+          onClick={() => void call("triage", "POST", {})}
+        >
+          Check again
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col rounded-xl border border-border/60 bg-card/40 shadow-xs/5">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border/50 px-4 py-2.5 text-sm">
+        <ScanSearchIcon className="size-4 text-muted-foreground" />
+        <span className="font-medium">{VERDICT_LABEL[t.verdict ?? ""] ?? "Checked"}</span>
+        {t.confidence ? (
+          <span className="text-xs text-muted-foreground">confidence {t.confidence}</span>
+        ) : null}
+        <span className="flex-1" />
+        <span className="text-xs text-muted-foreground">checked {timeAgo(t.at)} ago</span>
+      </div>
+      <div className="flex flex-col gap-3 px-4 py-3">
+        {t.summary ? <p className="text-sm">{t.summary}</p> : null}
+        {t.evidence && t.evidence.length > 0 ? (
+          <ul className="flex flex-col gap-1">
+            {t.evidence.map((e) => (
+              <li key={e} className="truncate font-mono text-xs text-muted-foreground" title={e}>
+                {e}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">Set status to</span>
+          <Select
+            value={status || "__keep"}
+            onValueChange={(value) =>
+              typeof value === "string" && setStatus(value === "__keep" ? "" : value)
+            }
+          >
+            <SelectTrigger size="sm" className="w-auto min-w-40" aria-label="Recommended status">
+              <SelectValue>
+                {status ? (
+                  <span className="inline-flex items-center gap-2 capitalize">
+                    <StatusDot
+                      status={row.statuses.find((s) => s.status === status) ?? { color: "" }}
+                    />
+                    {status}
+                  </span>
+                ) : (
+                  "Keep as is"
+                )}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectPopup alignItemWithTrigger={false}>
+              <SelectItem hideIndicator value="__keep">
+                Keep as is
+              </SelectItem>
+              {row.statuses.map((s) => (
+                <SelectItem hideIndicator key={s.status} value={s.status}>
+                  <span className="inline-flex items-center gap-2 capitalize">
+                    <StatusDot status={s} />
+                    {s.status}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        </div>
+        <Textarea
+          unstyled
+          value={comment}
+          placeholder="Comment to post with it (optional)"
+          className="block w-full rounded-lg border border-border/60 bg-background/60 [&_textarea]:min-h-20 [&_textarea]:resize-none [&_textarea]:bg-transparent [&_textarea]:px-3 [&_textarea]:py-2 [&_textarea]:text-sm"
+          onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setComment(event.target.value)}
+        />
+      </div>
+      <div className="flex items-center justify-end gap-2 border-t border-border/50 px-3 py-2.5">
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={busy}
+          onClick={() => void call("triage", "DELETE")}
+        >
+          Dismiss
+        </Button>
+        <Button
+          size="sm"
+          disabled={busy || (!status && !comment.trim())}
+          onClick={() => void call("apply", "POST", { status, comment })}
+        >
+          {status && comment.trim()
+            ? "Set status and comment"
+            : status
+              ? "Set status"
+              : "Post comment"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /** Opened tasks, so reopening one shows it at once while the service refreshes it. */
 const detailCache = new Map<string, MyTaskDetail>();
 
@@ -1000,12 +1306,14 @@ function TaskDetail({
   onClose,
   onStatus,
   onSnooze,
+  onData,
 }: {
   row: TaskRow;
   showOrganisation: boolean;
   onClose: () => void;
   onStatus: (name: string) => void;
   onSnooze: (on: boolean) => void;
+  onData: (body: MyTasksBody) => void;
 }) {
   const [detail, setDetail] = useState<MyTaskDetail | null>(() => detailCache.get(row.key) ?? null);
   const [error, setError] = useState<string | null>(null);
@@ -1139,6 +1447,7 @@ function TaskDetail({
             ) : null}
           </div>
         </div>
+        <TriageCard row={row} onData={onData} />
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         {detail === null && !error ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">

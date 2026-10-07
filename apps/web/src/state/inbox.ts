@@ -85,6 +85,20 @@ export interface MyTask {
   readonly date_updated: number;
   readonly parent: string | null;
   readonly snoozed_until: string | null;
+  readonly triage?: Triage | null;
+}
+/** The task-triager's recommendation for one task. */
+export interface Triage {
+  readonly state: "pending" | "ready" | "failed" | "applied";
+  readonly at: string;
+  readonly verdict?: string;
+  readonly suggested_status?: string;
+  readonly confidence?: string;
+  readonly summary?: string;
+  readonly evidence?: ReadonlyArray<string>;
+  readonly comment?: string;
+  readonly error?: string;
+  readonly cost_usd?: number | null;
 }
 export interface MyTasksSummary {
   readonly count: number;
@@ -96,6 +110,9 @@ export interface MyTasksSummary {
 export interface MyTasksBody extends MyTasksSummary {
   readonly tasks: ReadonlyArray<MyTask>;
   readonly statuses_by_list: Readonly<Record<string, ReadonlyArray<TaskStatus>>>;
+  readonly triage_queue?: number;
+  readonly triage_budget_usd?: number;
+  readonly triage_model?: string;
 }
 export interface MyTaskDetail {
   readonly task: MyTask;
