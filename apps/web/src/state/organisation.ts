@@ -1,7 +1,8 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
+import { useInboxFeeds } from "./inbox";
 import { primaryEnvironmentIdAtom } from "./primaryEnvironment";
 
 /**
@@ -97,4 +98,20 @@ export function useOrganisationScope(): OrganisationScope {
 
 export function useOrganisationNames(): Readonly<Record<string, string>> {
   return useSyncExternalStore(subscribe, readNames, () => EMPTY_NAMES);
+}
+
+/**
+ * The name shown for an organisation: a name the person set, else the company name its inbox
+ * service was started with, else the connection label (usually the machine name).
+ */
+export function useOrganisationLabel(): (environmentId: string, fallback: string) => string {
+  const names = useOrganisationNames();
+  const feeds = useInboxFeeds();
+  return useCallback(
+    (environmentId: string, fallback: string) =>
+      names[environmentId] ??
+      feeds.find((feed) => feed.environmentId === environmentId)?.companyLabel ??
+      fallback,
+    [feeds, names],
+  );
 }

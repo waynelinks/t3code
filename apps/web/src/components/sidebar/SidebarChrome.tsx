@@ -13,7 +13,7 @@ import {
   inOrganisationScope,
   renameOrganisation,
   setOrganisationScope,
-  useOrganisationNames,
+  useOrganisationLabel,
   useOrganisationScope,
 } from "../../state/organisation";
 import {
@@ -140,14 +140,13 @@ function OrganisationSwitcher({ onBackdrop }: { onBackdrop: boolean }) {
   const { environments } = useEnvironments();
   const navigate = useNavigate();
   const scope = useOrganisationScope();
-  const names = useOrganisationNames();
+  const nameOf = useOrganisationLabel();
   const selected = scope === "all" ? null : (environments.find((e) => e.environmentId === scope) ?? null);
   const known = scope === "all" || selected !== null;
   useEffect(() => {
     if (!known && environments.length > 0) setOrganisationScope("all");
   }, [known, environments.length]);
   if (environments.length < 2) return null;
-  const nameOf = (environmentId: string, fallback: string) => names[environmentId] ?? fallback;
   const current = selected ? nameOf(selected.environmentId, selected.label) : "All organisations";
   return (
     <Menu>

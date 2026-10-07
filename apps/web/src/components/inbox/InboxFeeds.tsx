@@ -37,13 +37,13 @@ function EnvironmentInboxFeed({ environmentId }: { environmentId: EnvironmentId 
     let cancelled = false;
     const load = async () => {
       try {
-        const data = await inboxRequest<{ items?: InboxItem[]; health?: InboxHealth }>(base, "/items");
+        const data = await inboxRequest<{ items?: InboxItem[]; health?: InboxHealth; company_label?: string }>(base, "/items");
         if (cancelled) return;
-        publishInboxFeed({ environmentId, base, items: data.items ?? [], health: data.health ?? null, error: null, loadedAt: Date.now() });
+        publishInboxFeed({ environmentId, base, companyLabel: data.company_label ?? null, items: data.items ?? [], health: data.health ?? null, error: null, loadedAt: Date.now() });
       } catch (error) {
         if (cancelled) return;
         publishInboxFeed({
-          environmentId, base, items: getInboxFeed(environmentId)?.items ?? [], health: null,
+          environmentId, base, companyLabel: getInboxFeed(environmentId)?.companyLabel ?? null, items: getInboxFeed(environmentId)?.items ?? [], health: null,
           error: error instanceof Error ? error.message : String(error), loadedAt: Date.now(),
         });
       }

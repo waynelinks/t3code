@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { useEnvironmentHttpBaseUrl, useEnvironments } from "../../state/environments";
 import { inboxBaseFor, inboxRequest, refreshInbox } from "../../state/inbox";
-import { useOrganisationNames } from "../../state/organisation";
+import { useOrganisationLabel } from "../../state/organisation";
 import { Button, InlineButton } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -24,11 +24,11 @@ interface InboxConfig {
 export function ChiefInboxSettings() {
   const scope = useOptionalSettingsScope();
   const { environments } = useEnvironments();
-  const names = useOrganisationNames();
+  const organisationLabel = useOrganisationLabel();
   const selected = scope?.environment ?? null;
   const targets = selected
-    ? [{ environmentId: selected.environmentId, label: names[selected.environmentId] ?? selected.label }]
-    : environments.map((e) => ({ environmentId: e.environmentId, label: names[e.environmentId] ?? e.label }));
+    ? [{ environmentId: selected.environmentId, label: organisationLabel(selected.environmentId, selected.label) }]
+    : environments.map((e) => ({ environmentId: e.environmentId, label: organisationLabel(e.environmentId, e.label) }));
   return (
     <SettingsSection id="chief-inbox" title="Inbox">
       {targets.length === 0 ? (

@@ -44,6 +44,8 @@ export interface InboxHealth {
 export interface EnvironmentInbox {
   readonly environmentId: EnvironmentId;
   readonly base: string;
+  /** The company name the inbox service was started with; the default organisation name. */
+  readonly companyLabel: string | null;
   readonly items: ReadonlyArray<InboxItem>;
   readonly health: InboxHealth | null;
   readonly error: string | null;

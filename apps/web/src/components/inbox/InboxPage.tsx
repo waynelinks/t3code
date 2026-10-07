@@ -3,7 +3,7 @@ import { ExternalLinkIcon, RefreshCwIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
 
 import { useEnvironments } from "../../state/environments";
-import { inOrganisationScope, useOrganisationNames, useOrganisationScope } from "../../state/organisation";
+import { inOrganisationScope, useOrganisationLabel, useOrganisationScope } from "../../state/organisation";
 import { inboxRequest, refreshInbox, useInboxFeeds, type EnvironmentInbox, type InboxItem } from "../../state/inbox";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -31,12 +31,12 @@ function timeAgo(iso: string): string {
 export function InboxPage() {
   const feeds = useInboxFeeds();
   const scope = useOrganisationScope();
-  const names = useOrganisationNames();
   const { environments } = useEnvironments();
+  const organisationLabel = useOrganisationLabel();
   const labelFor = useCallback(
     (environmentId: EnvironmentId) =>
-      names[environmentId] ?? environments.find((e) => e.environmentId === environmentId)?.label ?? environmentId,
-    [environments, names],
+      organisationLabel(environmentId, environments.find((e) => e.environmentId === environmentId)?.label ?? environmentId),
+    [environments, organisationLabel],
   );
   const inScope = useMemo(
     () => feeds.filter((feed) => inOrganisationScope(scope, feed.environmentId)),
