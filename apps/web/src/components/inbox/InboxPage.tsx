@@ -14,6 +14,7 @@ import {
   UndoIcon,
 } from "lucide-react";
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -42,8 +43,8 @@ import {
 } from "../../state/inbox";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import { SidebarInput } from "../ui/sidebar";
 import { Spinner } from "../ui/spinner";
 import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
@@ -129,12 +130,37 @@ function readSeen(): Record<string, string> {
   }
 }
 
+const AVATAR_TINTS = [
+  "bg-sky-500/15 text-sky-700 dark:text-sky-300",
+  "bg-violet-500/15 text-violet-700 dark:text-violet-300",
+  "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  "bg-rose-500/15 text-rose-700 dark:text-rose-300",
+  "bg-teal-500/15 text-teal-700 dark:text-teal-300",
+];
+function tintFor(name: string): string {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) | 0;
+  return AVATAR_TINTS[Math.abs(h) % AVATAR_TINTS.length] ?? "bg-muted text-foreground/80";
+}
+function dayLabel(iso: string): string {
+  const d = new Date(iso);
+  const today = new Date();
+  const start = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((start(today) - start(d)) / 86_400_000);
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return d.toLocaleDateString(undefined, { weekday: "long" });
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "long" });
+}
+
 function Avatar({ name, className }: { name: string; className?: string }) {
   return (
     <span
       aria-hidden
       className={cn(
-        "flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-foreground/80",
+        "flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-medium",
+        tintFor(name),
         className,
       )}
     >
@@ -241,6 +267,26 @@ export function InboxPage() {
     if (selected && seen[selected.key] !== signature(selected)) markSeen(selected);
   }, [selected, seen, markSeen]);
 
+  const lastChecked =
+    inScope
+      .map((feed) => feed.health?.last_poll_at ?? "")
+      .filter(Boolean)
+      .sort()
+      .pop() ?? null;
+  const [checking, setChecking] = useState(false);
+  const checkNow = useCallback(async () => {
+    setChecking(true);
+    try {
+      await Promise.all(
+        inScope.map((feed) =>
+          inboxRequest(feed.base, "/poll", { method: "POST" }).catch(() => null),
+        ),
+      );
+      await refreshInbox();
+    } finally {
+      setChecking(false);
+    }
+  }, [inScope]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const act = useCallback<Act>(async (row, action, body) => {
@@ -353,9 +399,14 @@ export function InboxPage() {
           {scope === "all" ? "All organisations" : labelFor(scope)}
         </span>
         <div className="min-w-0 flex-1" />
-        <Button variant="ghost" size="sm" onClick={() => void refreshInbox()}>
-          <RefreshCwIcon className="size-4" />
-          Refresh
+        {lastChecked ? (
+          <span className="hidden text-xs text-muted-foreground sm:inline">
+            Checked {timeAgo(lastChecked) === "now" ? "just now" : `${timeAgo(lastChecked)} ago`}
+          </span>
+        ) : null}
+        <Button variant="ghost" size="sm" disabled={checking} onClick={() => void checkNow()}>
+          <RefreshCwIcon className={cn("size-4", checking && "animate-spin")} />
+          {checking ? "Checking" : "Check now"}
         </Button>
       </WorkspacePageHeader>
       <div className="flex min-h-0 flex-1 border-t border-border/50">
@@ -366,14 +417,16 @@ export function InboxPage() {
           )}
         >
           <div className="flex flex-col gap-2 p-3">
-            <div className="relative">
-              <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                size="sm"
-                className="pl-8"
-                placeholder="Search the inbox"
+            <div className="flex h-8 min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground">
+              <SearchIcon className="size-4 shrink-0 text-(--sidebar-icon-color)" />
+              <SidebarInput
+                nativeInput
+                type="search"
+                placeholder="Search"
+                aria-label="Search the inbox"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(event) => setQuery(event.currentTarget.value)}
+                className="min-w-0 flex-1"
               />
             </div>
             <ToggleGroup
@@ -404,7 +457,7 @@ export function InboxPage() {
             <FeedNotice key={feed.environmentId} feed={feed} label={labelFor(feed.environmentId)} />
           ))}
           {error ? <p className="mx-3 mb-2 text-xs text-destructive">{error}</p> : null}
-          <ul className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+          <ul className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-3">
             {loading && visible.length === 0 ? (
               <li className="flex items-center justify-center gap-2 px-3 py-10 text-sm text-muted-foreground">
                 <Spinner className="size-3.5" />
@@ -421,16 +474,26 @@ export function InboxPage() {
                       : "Nothing closed yet."}
               </li>
             ) : (
-              visible.map((row) => (
-                <ListItem
-                  key={row.key}
-                  row={row}
-                  selected={row.key === selected?.key}
-                  unread={seen[row.key] !== signature(row)}
-                  showOrganisation={scope === "all"}
-                  onSelect={() => setSelectedKey(row.key)}
-                />
-              ))
+              visible.map((row, index) => {
+                const label = dayLabel(row.created_at);
+                const first = index === 0 || dayLabel(visible[index - 1]!.created_at) !== label;
+                return (
+                  <Fragment key={row.key}>
+                    {first ? (
+                      <li className="px-3 pt-3 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                        {label}
+                      </li>
+                    ) : null}
+                    <ListItem
+                      row={row}
+                      selected={row.key === selected?.key}
+                      unread={seen[row.key] !== signature(row)}
+                      showOrganisation={scope === "all"}
+                      onSelect={() => setSelectedKey(row.key)}
+                    />
+                  </Fragment>
+                );
+              })
             )}
           </ul>
         </aside>
@@ -499,8 +562,10 @@ function ListItem({
         onClick={onSelect}
         aria-current={selected ? "true" : undefined}
         className={cn(
-          "flex w-full flex-col gap-1 rounded-lg px-3 py-2.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-          selected ? "bg-sidebar-row-selected" : "hover:bg-sidebar-row-hover",
+          "relative flex w-full flex-col gap-1 rounded-lg px-3 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+          selected
+            ? "bg-sidebar-row-selected before:absolute before:inset-y-3 before:left-0 before:w-0.5 before:rounded-full before:bg-primary"
+            : "hover:bg-sidebar-row-hover",
         )}
       >
         <span className="flex w-full items-center gap-2">
@@ -752,8 +817,7 @@ function Composer({ row, busy, onAct }: { row: Row; busy: boolean; onAct: Act })
         id="inbox-reply"
         unstyled
         value={text}
-        rows={7}
-        className="w-full resize-none bg-transparent px-4 py-3 text-sm leading-relaxed outline-none"
+        className="block w-full [&_textarea]:min-h-36 [&_textarea]:resize-none [&_textarea]:bg-transparent [&_textarea]:px-4 [&_textarea]:py-3 [&_textarea]:text-sm [&_textarea]:leading-relaxed"
         placeholder={
           drafting ? "Drafting a reply from the code" : "Write a reply, or draft one from the code"
         }
@@ -863,9 +927,8 @@ function TaskComposer({
       <Textarea
         unstyled
         value={goal}
-        rows={8}
         aria-label="What should be built"
-        className="w-full resize-none bg-transparent px-4 py-3 text-sm leading-relaxed outline-none"
+        className="block w-full [&_textarea]:min-h-44 [&_textarea]:resize-none [&_textarea]:bg-transparent [&_textarea]:px-4 [&_textarea]:py-3 [&_textarea]:text-sm [&_textarea]:leading-relaxed"
         onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setGoal(event.target.value)}
       />
       <div className="flex flex-wrap items-center gap-2 border-t border-border/50 px-3 py-2.5">
