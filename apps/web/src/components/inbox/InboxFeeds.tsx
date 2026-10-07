@@ -49,13 +49,20 @@ function EnvironmentInboxFeed({ environmentId }: { environmentId: EnvironmentId 
       }
     };
     const unregister = registerInboxRefresher(environmentId, load);
-    void load();
-    const timer = setInterval(() => void load(), INBOX_REFRESH_MS);
+    // Every 30 seconds; every 4 while a spec is being written or a task is building.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const schedule = () => {
+      const busy = (getInboxFeed(environmentId)?.items ?? []).some((item) =>
+        ["speccing", "approved", "running", "failed_rung"].includes(item.task?.status ?? "") || item.draft.state === "pending",
+      );
+      timer = setTimeout(() => void load().then(() => !cancelled && schedule()), busy ? 4_000 : INBOX_REFRESH_MS);
+    };
+    void load().then(() => !cancelled && schedule());
     const onFocus = () => void load();
     window.addEventListener("focus", onFocus);
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      if (timer) clearTimeout(timer);
       window.removeEventListener("focus", onFocus);
       unregister();
       removeInboxFeed(environmentId);

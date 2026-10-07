@@ -238,7 +238,10 @@ function goalFrom(row: Row): string {
   const ctx = row.context as { where?: unknown; thread?: unknown };
   const where = typeof ctx.where === "string" ? ctx.where : row.title;
   const lines = [`${row.who || "A colleague"} wrote in ${where}${row.url ? ` (${row.url})` : ""}:`, "", row.body.trim()];
-  const thread = Array.isArray(ctx.thread) ? (ctx.thread as { who?: string; text?: string }[]).slice(-4) : [];
+  // earlier messages only: the message itself is already above
+  const thread = Array.isArray(ctx.thread)
+    ? (ctx.thread as { who?: string; text?: string }[]).filter((x) => x.text && !row.body.includes(x.text)).slice(-4)
+    : [];
   if (thread.length > 0) lines.push("", "Earlier messages:", ...thread.map((x) => `- ${x.who ?? "someone"}: ${x.text ?? ""}`));
   lines.push("", "Build what this asks for, and keep the change as small as the request allows.");
   return lines.join("\n");
