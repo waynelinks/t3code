@@ -16,10 +16,14 @@ export const HOSTED_APP_CHANNEL =
   hostedAppChannel === "latest" || hostedAppChannel === "nightly" ? hostedAppChannel : null;
 export const HOSTED_APP_CHANNEL_LABEL =
   HOSTED_APP_CHANNEL === "nightly" ? "Nightly" : HOSTED_APP_CHANNEL === "latest" ? "Latest" : null;
-export const APP_BASE_NAME = injectedDesktopAppBranding?.baseName ?? "T3 Code";
+const brandedBaseName = import.meta.env.VITE_APP_BASE_NAME?.trim();
+const brandedStageLabel = import.meta.env.VITE_APP_STAGE_LABEL?.trim();
+/** True when a build rebrands the app (VITE_APP_BASE_NAME); the sidebar then shows that name instead of the T3 wordmark. */
+export const APP_IS_REBRANDED = Boolean(brandedBaseName) && brandedBaseName !== "T3 Code";
+export const APP_BASE_NAME = injectedDesktopAppBranding?.baseName ?? brandedBaseName ?? "T3 Code";
 export const APP_STAGE_LABEL =
   injectedDesktopAppBranding?.stageLabel ??
-  HOSTED_APP_CHANNEL_LABEL ??
+  (brandedStageLabel ?? HOSTED_APP_CHANNEL_LABEL) ??
   (import.meta.env.DEV ? "Dev" : "Alpha");
 export const APP_DISPLAY_NAME =
   injectedDesktopAppBranding?.displayName ??
