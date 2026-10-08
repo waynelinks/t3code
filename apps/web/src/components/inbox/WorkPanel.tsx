@@ -4,6 +4,7 @@ import { ExternalLinkIcon, HammerIcon, MessageSquareIcon, PencilRulerIcon } from
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
 
 import { useProjects } from "../../state/entities";
+import ChatMarkdown from "../ChatMarkdown";
 import { inboxRequest, refreshInbox, type TaskStatus } from "../../state/inbox";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -20,6 +21,8 @@ interface WorkLink {
   readonly repo: string;
   readonly created_at: string;
   readonly title?: string;
+  /** When the owner posted this build's pull request back to the ClickUp task. */
+  readonly posted_at?: string;
   readonly state?: {
     readonly title: string;
     readonly status: string;
@@ -53,6 +56,8 @@ const THREAD_LABEL: Record<string, string> = {
   ready: "Waiting for you",
   idle: "Waiting for you",
   error: "Stopped on an error",
+  stopped: "Stopped",
+  interrupted: "Stopped",
   deleted: "Deleted",
 };
 
@@ -280,6 +285,7 @@ export function WorkPanel({
                   })
                 }
                 onBuild={(buildId, action) => void buildAction(buildId, action)}
+                onPosted={() => void load()}
               />
             ))}
           </ul>
@@ -291,12 +297,14 @@ export function WorkPanel({
 
 function LinkRow({
   link,
+  environmentId,
   busy,
   statuses,
   base,
   taskId,
   onOpenThread,
   onBuild,
+  onPosted,
 }: {
   link: WorkLink;
   busy: boolean;
@@ -306,6 +314,7 @@ function LinkRow({
   taskId: string | null;
   onOpenThread: (threadId: string) => void;
   onBuild: (buildId: string, action: "approve" | "discard") => void;
+  onPosted: () => void;
 }) {
   const [showSpec, setShowSpec] = useState(false);
   if (link.kind === "thread") {
@@ -392,12 +401,30 @@ function LinkRow({
         ) : null}
       </div>
       {(showSpec || status === "proposed") && link.task?.spec ? (
-        <div className="ml-6 max-h-64 overflow-y-auto rounded-lg border border-border/60 bg-background/60 p-3 text-sm whitespace-pre-wrap">
-          {link.task.spec}
+        <div className="ml-6 max-h-64 overflow-y-auto rounded-lg border border-border/60 bg-background/60 p-3">
+          <ChatMarkdown
+            text={link.task.spec}
+            cwd={undefined}
+            environmentId={environmentId}
+            className="text-sm"
+          />
         </div>
       ) : null}
       {status === "green" && link.task?.pr_url && taskId ? (
-        <PostBack base={base} taskId={taskId} prUrl={link.task.pr_url} statuses={statuses ?? []} />
+        link.posted_at ? (
+          <p className="ml-6 text-xs text-muted-foreground">
+            Posted on the ClickUp task {ago(link.posted_at)}.
+          </p>
+        ) : (
+          <PostBack
+            base={base}
+            taskId={taskId}
+            buildId={link.id}
+            prUrl={link.task.pr_url}
+            statuses={statuses ?? []}
+            onPosted={onPosted}
+          />
+        )
       ) : null}
     </li>
   );
@@ -407,13 +434,17 @@ function LinkRow({
 function PostBack({
   base,
   taskId,
+  buildId,
   prUrl,
   statuses,
+  onPosted,
 }: {
   base: string;
   taskId: string;
+  buildId: string;
   prUrl: string;
   statuses: ReadonlyArray<TaskStatus>;
+  onPosted: () => void;
 }) {
   const review = statuses.find((s) => /review|qa|testing/i.test(s.status));
   const [status, setStatus] = useState(review?.status ?? "");
@@ -458,9 +489,12 @@ function PostBack({
             setBusy(true);
             void inboxRequest(base, `/mytasks/${encodeURIComponent(taskId)}/apply`, {
               method: "POST",
-              body: { status, comment },
+              body: { status, comment, build_id: buildId },
             })
-              .then(() => setDone(true))
+              .then(() => {
+                setDone(true);
+                onPosted();
+              })
               .catch((e) =>
                 toastManager.add({
                   type: "error",
