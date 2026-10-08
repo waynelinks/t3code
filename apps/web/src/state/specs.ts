@@ -15,6 +15,8 @@ export interface SpecStepEvidence {
   readonly spec: string | null;
   readonly acceptance_cases: number;
   readonly reasons: string | null;
+  /** The T3 thread the step's build runs in. */
+  readonly thread_id?: string | null;
 }
 export interface SpecStep {
   readonly id: string;

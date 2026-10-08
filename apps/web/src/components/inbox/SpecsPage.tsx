@@ -733,6 +733,7 @@ function SpecDetail({
   onDeleted: () => void;
 }) {
   const repos = useRepos(env);
+  const navigate = useNavigate();
   const [spec, setSpec] = useState<Spec | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -930,6 +931,12 @@ function SpecDetail({
                   canBuild={approvedReq && approvedDesign}
                   onAction={(action) =>
                     call(`/steps/${encodeURIComponent(st.id)}/${action}`, "POST", {})
+                  }
+                  onWatch={(threadId) =>
+                    void navigate({
+                      to: "/$environmentId/$threadId",
+                      params: { environmentId: env, threadId },
+                    })
                   }
                 />
               ))}
@@ -1209,6 +1216,7 @@ function StepRow({
   busy,
   canBuild,
   onAction,
+  onWatch,
 }: {
   step: SpecStep;
   stepById: Map<string, SpecStep>;
@@ -1216,6 +1224,7 @@ function StepRow({
   busy: boolean;
   canBuild: boolean;
   onAction: (action: "build" | "approve" | "discard") => Promise<boolean>;
+  onWatch: (threadId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const state = step.state ?? "todo";
@@ -1312,6 +1321,11 @@ function StepRow({
                 onClick={() => void onAction("discard")}
               >
                 Discard
+              </Button>
+            ) : null}
+            {ev?.thread_id ? (
+              <Button size="xs" variant="outline" onClick={() => onWatch(ev.thread_id!)}>
+                Watch
               </Button>
             ) : null}
             {ev?.pr_url ? (
