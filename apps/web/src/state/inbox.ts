@@ -57,6 +57,8 @@ export interface InboxTask {
   readonly title?: string;
   readonly spec?: string | null;
   readonly acceptance_cases?: number;
+  /** The acceptance checks, for the spec drawer. */
+  readonly checks?: ReadonlyArray<{ readonly id: string; readonly what: string }>;
   readonly pr_url?: string | null;
   readonly reasons?: string | null;
   readonly error?: string | null;

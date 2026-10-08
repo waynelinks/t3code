@@ -1,10 +1,15 @@
 import type { EnvironmentId } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { ExternalLinkIcon, HammerIcon, MessageSquareIcon, PencilRulerIcon } from "lucide-react";
+import {
+  ExternalLinkIcon,
+  FileTextIcon,
+  HammerIcon,
+  MessageSquareIcon,
+  PencilRulerIcon,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
 
 import { useProjects } from "../../state/entities";
-import ChatMarkdown from "../ChatMarkdown";
 import { inboxRequest, refreshInbox, type TaskStatus } from "../../state/inbox";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -13,6 +18,7 @@ import { Spinner } from "../ui/spinner";
 import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
 import { ago } from "./shared";
+import { SpecSheet } from "./SpecSheet";
 
 /** A thread or a Chief build started from a ClickUp task or an Inbox row, as the company service reports it. */
 interface WorkLink {
@@ -35,6 +41,7 @@ interface WorkLink {
     readonly pr_url: string | null;
     readonly review: string | null;
     readonly spec: string | null;
+    readonly checks?: ReadonlyArray<{ readonly id: string; readonly what: string }>;
     readonly thread_id?: string | null;
   };
 }
@@ -61,9 +68,37 @@ const THREAD_LABEL: Record<string, string> = {
   deleted: "Deleted",
 };
 
+/** The company's base folder and repositories, as the company service lists them (its app/repos). */
+export interface CompanyRepos {
+  readonly base: string | null;
+  readonly repos: ReadonlyArray<{ readonly name: string; readonly path: string }>;
+}
+const companyReposCache = new Map<string, CompanyRepos>();
+export function useCompanyRepos(base: string): CompanyRepos {
+  const [state, setState] = useState<CompanyRepos>(
+    () => companyReposCache.get(base) ?? { base: null, repos: [] },
+  );
+  useEffect(() => {
+    let live = true;
+    void inboxRequest<{ base: string; repos: { name: string; path: string }[] }>(base, "/repos")
+      .then((d) => {
+        const next = { base: d.base, repos: d.repos };
+        companyReposCache.set(base, next);
+        if (live) setState(next);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [base]);
+  return state;
+}
+
 /**
  * "Work on it": start a Plan-mode thread primed with the task, or let Chief build it, and see what was
- * started from here. `source` picks the service routes: a ClickUp task or an Inbox row.
+ * started from here. `source` picks the service routes: a ClickUp task or an Inbox row. A thread opens
+ * at the company's base folder by default, so it sees every repository and decides; a build needs one
+ * repository, the one named in the text when there is one.
  */
 export function WorkPanel({
   base,
@@ -72,6 +107,9 @@ export function WorkPanel({
   id,
   allowBuild,
   statuses,
+  onBuildClick,
+  hint,
+  compact = false,
 }: {
   base: string;
   environmentId: EnvironmentId;
@@ -80,20 +118,53 @@ export function WorkPanel({
   allowBuild: boolean;
   /** The ClickUp list's statuses, for "post the pull request and move the task". */
   statuses?: ReadonlyArray<TaskStatus>;
+  /** When given, "Let Chief build it" calls this instead of opening the panel's own composer. */
+  onBuildClick?: () => void;
+  /** Text the work is about: a repository named in it is the build's default. */
+  hint?: string;
+  /** One row of buttons; the linked work below only when there is any. */
+  compact?: boolean;
 }) {
   const navigate = useNavigate();
   const projects = useProjects();
-  const repos = useMemo(
+  const company = useCompanyRepos(base);
+  const projectRoots = useMemo(
     () =>
-      projects
-        .filter((p) => p.environmentId === environmentId && p.workspaceRoot)
-        .map((p) => ({ path: p.workspaceRoot, name: p.title })),
+      new Set(
+        projects
+          .filter((p) => p.environmentId === environmentId && p.workspaceRoot)
+          .map((p) => p.workspaceRoot),
+      ),
     [projects, environmentId],
+  );
+  // what a thread can open in: the whole company first, then each repository the console knows
+  const repos = useMemo(() => {
+    const list: { path: string; name: string }[] = [];
+    if (company.base && projectRoots.has(company.base))
+      list.push({ path: company.base, name: "Whole company" });
+    for (const r of company.repos) if (projectRoots.has(r.path)) list.push(r);
+    if (list.length === 0)
+      for (const p of projects)
+        if (p.environmentId === environmentId && p.workspaceRoot)
+          list.push({ path: p.workspaceRoot, name: p.title });
+    return list;
+  }, [company, projectRoots, projects, environmentId]);
+  const buildRepos = useMemo(
+    () => repos.filter((r) => r.path !== company.base),
+    [repos, company.base],
   );
   const [repo, setRepo] = useState("");
   useEffect(() => {
     if (!repo || !repos.some((r) => r.path === repo)) setRepo(repos[0]?.path ?? "");
   }, [repos, repo]);
+  const [buildRepo, setBuildRepo] = useState("");
+  useEffect(() => {
+    if (buildRepo && buildRepos.some((r) => r.path === buildRepo)) return;
+    const text = (hint ?? "").toLowerCase();
+    setBuildRepo(
+      (buildRepos.find((r) => text.includes(r.name.toLowerCase())) ?? buildRepos[0])?.path ?? "",
+    );
+  }, [buildRepos, buildRepo, hint]);
   const prefix =
     source === "mytask" ? `/mytasks/${encodeURIComponent(id)}` : `/items/${encodeURIComponent(id)}`;
   const [links, setLinks] = useState<ReadonlyArray<WorkLink> | null>(null);
@@ -152,7 +223,7 @@ export function WorkPanel({
         (
           await inboxRequest<{ links: WorkLink[] }>(base, `${prefix}/build`, {
             method: "POST",
-            body: { repo, ...(goal.trim() ? { goal } : {}) },
+            body: { repo: buildRepo, ...(goal.trim() ? { goal } : {}) },
           })
         ).links,
       );
@@ -213,7 +284,9 @@ export function WorkPanel({
       <div className="flex flex-col gap-3 px-4 py-3">
         {repos.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            Add the repository as a project in Chief first.
+            {company.repos.length > 0
+              ? "Chief is adding the company's repositories to the console. A moment."
+              : "No repositories found for this company: put them under its app/repos folder."}
           </p>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
@@ -230,18 +303,20 @@ export function WorkPanel({
               <Button
                 size="sm"
                 variant="outline"
-                disabled={busy || !repo}
-                onClick={() => setComposing((v) => !v)}
+                disabled={busy || (!onBuildClick && !buildRepo)}
+                onClick={() => (onBuildClick ? onBuildClick() : setComposing((v) => !v))}
               >
                 <HammerIcon className="size-3.5" />
                 Let Chief build it
               </Button>
             ) : null}
-            <span className="text-xs text-muted-foreground">
-              {allowBuild
-                ? "A thread opens in Plan mode with the task in it. A build writes a spec for you to approve first."
-                : "A thread opens in Plan mode with the message in it, to plan or answer it with the code."}
-            </span>
+            {compact ? null : (
+              <span className="text-xs text-muted-foreground">
+                {allowBuild
+                  ? "A thread opens with the whole company in view. A build writes a spec for you to approve first."
+                  : "A thread opens in Plan mode with the message in it, to plan or answer it with the code."}
+              </span>
+            )}
           </div>
         )}
         {composing ? (
@@ -253,11 +328,31 @@ export function WorkPanel({
               className="block w-full rounded-lg border border-border/60 bg-background/60 [&_textarea]:min-h-24 [&_textarea]:resize-y [&_textarea]:bg-transparent [&_textarea]:px-3 [&_textarea]:py-2 [&_textarea]:text-sm"
               onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setGoal(e.target.value)}
             />
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {buildRepos.length > 1 ? (
+                <Select
+                  value={buildRepo}
+                  onValueChange={(v) => typeof v === "string" && setBuildRepo(v)}
+                >
+                  <SelectTrigger size="sm" className="w-auto min-w-40" aria-label="Build in">
+                    <SelectValue>
+                      Build in{" "}
+                      {buildRepos.find((r) => r.path === buildRepo)?.name ?? "a repository"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectPopup alignItemWithTrigger={false}>
+                    {buildRepos.map((r) => (
+                      <SelectItem hideIndicator key={r.path} value={r.path}>
+                        {r.name}
+                      </SelectItem>
+                    ))}
+                  </SelectPopup>
+                </Select>
+              ) : null}
               <Button size="sm" variant="ghost" disabled={busy} onClick={() => setComposing(false)}>
                 Cancel
               </Button>
-              <Button size="sm" disabled={busy || !repo} onClick={() => void startBuild()}>
+              <Button size="sm" disabled={busy || !buildRepo} onClick={() => void startBuild()}>
                 Write the spec
               </Button>
             </div>
@@ -372,6 +467,10 @@ function LinkRow({
         </Badge>
         {status === "proposed" ? (
           <>
+            <Button size="xs" variant="outline" onClick={() => setShowSpec(true)}>
+              <FileTextIcon className="size-3" />
+              Read the spec
+            </Button>
             <Button
               size="xs"
               variant="ghost"
@@ -401,15 +500,39 @@ function LinkRow({
           </Button>
         ) : null}
       </div>
-      {(showSpec || status === "proposed") && link.task?.spec ? (
-        <div className="ml-6 max-h-64 overflow-y-auto rounded-lg border border-border/60 bg-background/60 p-3">
-          <ChatMarkdown
-            text={link.task.spec}
-            cwd={undefined}
-            environmentId={environmentId}
-            className="text-sm"
-          />
-        </div>
+      {link.task?.spec ? (
+        <SpecSheet
+          open={showSpec}
+          onOpenChange={setShowSpec}
+          title={link.task.title || "Chief build"}
+          spec={link.task.spec}
+          checks={link.task.checks ?? []}
+          environmentId={environmentId}
+          footer={
+            status === "proposed" ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => onBuild(link.id, "discard")}
+                >
+                  Discard
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => {
+                    setShowSpec(false);
+                    onBuild(link.id, "approve");
+                  }}
+                >
+                  Approve and build
+                </Button>
+              </>
+            ) : null
+          }
+        />
       ) : null}
       {status === "green" && link.task?.pr_url && taskId ? (
         link.posted_at ? (

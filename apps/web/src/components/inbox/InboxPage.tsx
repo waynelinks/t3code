@@ -30,7 +30,6 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 
 import { cn } from "../../lib/utils";
-import { useProjects } from "../../state/entities";
 import { useEnvironments } from "../../state/environments";
 import {
   inOrganisationScope,
@@ -53,7 +52,8 @@ import { toastManager } from "../ui/toast";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { Avatar, IconAction, SearchField, timeAgo, ago } from "./shared";
-import { WorkPanel } from "./WorkPanel";
+import { SpecSheet } from "./SpecSheet";
+import { useCompanyRepos, WorkPanel } from "./WorkPanel";
 
 interface Row extends InboxItem {
   readonly environmentId: EnvironmentId;
@@ -626,17 +626,6 @@ function Detail({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          {!liveTask && !composingTask && row.source !== "chief" && row.status === "open" ? (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy}
-              onClick={() => setComposingTask(true)}
-            >
-              <ListChecksIcon className="size-3.5" />
-              Let Chief build it
-            </Button>
-          ) : null}
           {row.url ? (
             <IconAction
               label="Open in ClickUp"
@@ -712,18 +701,6 @@ function Detail({
             <p className="whitespace-pre-wrap">{row.reply.text}</p>
           </div>
         ) : null}
-        {row.source !== "chief" ? (
-          <WorkPanel
-            base={row.base}
-            environmentId={row.environmentId}
-            source="item"
-            id={row.id}
-            allowBuild={false}
-          />
-        ) : null}
-        {liveTask ? (
-          <TaskPanel row={row} busy={busy} onAct={onAct} onRetry={() => setComposingTask(true)} />
-        ) : null}
         {composingTask ? (
           <TaskComposer
             row={row}
@@ -733,6 +710,21 @@ function Detail({
           />
         ) : replyable && row.status === "open" ? (
           <Composer row={row} busy={busy} onAct={onAct} />
+        ) : null}
+        {liveTask ? (
+          <TaskPanel row={row} busy={busy} onAct={onAct} onRetry={() => setComposingTask(true)} />
+        ) : null}
+        {row.source !== "chief" ? (
+          <WorkPanel
+            base={row.base}
+            environmentId={row.environmentId}
+            source="item"
+            id={row.id}
+            allowBuild={!liveTask && !composingTask && row.status === "open"}
+            onBuildClick={() => setComposingTask(true)}
+            hint={`${row.title} ${row.body}`}
+            compact
+          />
         ) : null}
       </div>
     </div>
@@ -915,19 +907,16 @@ function TaskComposer({
   onAct: Act;
   onClose: () => void;
 }) {
-  const projects = useProjects();
-  const repos = useMemo(
-    () =>
-      projects
-        .filter((p) => p.environmentId === row.environmentId && p.workspaceRoot)
-        .map((p) => ({ path: p.workspaceRoot, name: p.title })),
-    [projects, row.environmentId],
-  );
+  const company = useCompanyRepos(row.base);
+  const repos = company.repos;
   const [goal, setGoal] = useState(() => goalFrom(row));
-  const [repo, setRepo] = useState<string>(() => repos[0]?.path ?? "");
+  const [repo, setRepo] = useState<string>("");
   useEffect(() => {
-    if (!repo && repos[0]) setRepo(repos[0].path);
-  }, [repo, repos]);
+    // the repository named in the message, else the first
+    if (repo && repos.some((r) => r.path === repo)) return;
+    const text = `${row.title} ${row.body}`.toLowerCase();
+    setRepo((repos.find((r) => text.includes(r.name.toLowerCase())) ?? repos[0])?.path ?? "");
+  }, [repos, repo, row.title, row.body]);
   return (
     <div className="flex flex-col rounded-xl border border-border/60 bg-card/40 shadow-xs/5">
       <div className="flex flex-wrap items-center gap-2 border-b border-border/50 px-4 py-2.5 text-sm">
@@ -999,65 +988,62 @@ function TaskPanel({
 }) {
   const task = row.task!;
   const navigate = useNavigate();
-  const waiting = (text: string) => (
-    <p className="flex items-center gap-2 text-sm text-muted-foreground">
-      <Spinner className="size-3.5" />
-      {text}
-    </p>
+  const [reading, setReading] = useState(false);
+  const watch = task.thread_id ? (
+    <Button
+      size="xs"
+      variant="outline"
+      onClick={() =>
+        void navigate({
+          to: "/$environmentId/$threadId",
+          params: { environmentId: row.environmentId, threadId: task.thread_id! },
+        })
+      }
+    >
+      Watch
+    </Button>
+  ) : null;
+  const discard = (
+    <Button size="xs" variant="ghost" disabled={busy} onClick={() => void onAct(row, "discard")}>
+      Discard
+    </Button>
   );
-  let body: ReactNode = null;
+  let line: ReactNode = null;
   let actions: ReactNode = null;
   switch (task.status) {
     case "speccing":
-      body = waiting("The spec-writer is reading the code and writing the spec.");
+      line = (
+        <span className="flex items-center gap-2">
+          <Spinner className="size-3.5" />
+          Writing the spec from the code
+        </span>
+      );
       break;
     case "proposed":
-      body = (
-        <>
-          <p className="text-sm">
-            Spec ready, with {task.acceptance_cases ?? 0} acceptance checks. Nothing is built until
-            you approve.
-          </p>
-          {task.spec ? (
-            <div className="max-h-80 overflow-y-auto rounded-lg border border-border/60 bg-background/60 p-3 text-sm whitespace-pre-wrap">
-              {task.spec}
-            </div>
-          ) : null}
-        </>
-      );
+      line = `Spec ready, with ${task.acceptance_cases ?? 0} acceptance ${task.acceptance_cases === 1 ? "check" : "checks"}. Nothing is built until you approve.`;
       actions = (
         <>
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={busy}
-            onClick={() => void onAct(row, "discard")}
-          >
-            Discard
+          <Button size="xs" variant="outline" onClick={() => setReading(true)}>
+            <FileTextIcon className="size-3" />
+            Read the spec
           </Button>
-          <Button size="sm" disabled={busy} onClick={() => void onAct(row, "approve")}>
+          {discard}
+          <Button size="xs" disabled={busy} onClick={() => void onAct(row, "approve")}>
             Approve and build
           </Button>
         </>
       );
       break;
     case "spec_failed":
-      body = (
-        <p className="text-sm text-destructive">
+      line = (
+        <span className="text-destructive">
           The spec-writer stopped: {task.error ?? "no reason given"}
-        </p>
+        </span>
       );
       actions = (
         <>
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={busy}
-            onClick={() => void onAct(row, "discard")}
-          >
-            Discard
-          </Button>
-          <Button size="sm" variant="outline" disabled={busy} onClick={onRetry}>
+          {discard}
+          <Button size="xs" variant="outline" disabled={busy} onClick={onRetry}>
             Try again
           </Button>
         </>
@@ -1066,82 +1052,96 @@ function TaskPanel({
     case "approved":
     case "running":
     case "failed_rung":
-      body = waiting("Building: implementer, done-gate, reviewer. This takes a while.");
+      line = (
+        <span className="flex items-center gap-2">
+          <Spinner className="size-3.5" />
+          Building: implementer, done-gate, reviewer. This takes a while.
+        </span>
+      );
+      actions = watch;
       break;
     case "green":
-      body = task.pr_url ? (
-        <p className="text-sm">
+      line = task.pr_url ? (
+        <>
           Built and reviewed.{" "}
           <a
             href={task.pr_url}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 font-medium hover:underline"
+            className="inline-flex items-center gap-1 font-medium text-foreground hover:underline"
           >
             Open the draft pull request <ExternalLinkIcon className="size-3.5" />
           </a>
-        </p>
+        </>
       ) : (
-        <p className="text-sm">
-          Built and reviewed. {task.reasons ? `The pull request did not open: ${task.reasons}` : ""}
-        </p>
+        `Built and reviewed.${task.reasons ? ` The pull request did not open: ${task.reasons}` : ""}`
       );
+      actions = watch;
       break;
     case "needs_owner":
-      body = (
-        <>
-          <p className="text-sm">The build stopped and needs you.</p>
-          {task.reasons ? (
-            <div className="max-h-48 overflow-y-auto rounded-lg border border-border/60 bg-background/60 p-3 text-xs whitespace-pre-wrap">
-              {task.reasons}
-            </div>
-          ) : null}
-        </>
-      );
+      line = "The build stopped and needs you.";
       actions = (
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={busy}
-          onClick={() => void onAct(row, "discard")}
-        >
-          Discard
-        </Button>
+        <>
+          {discard}
+          {watch}
+        </>
       );
       break;
     default:
-      body = <p className="text-sm text-muted-foreground">Task status: {task.status}</p>;
+      line = `Build status: ${task.status}`;
   }
   return (
-    <div className="flex flex-col rounded-xl border border-border/60 bg-card/40 shadow-xs/5">
-      <div className="flex flex-wrap items-center gap-2 border-b border-border/50 px-4 py-2.5 text-sm">
-        <ListChecksIcon className="size-4 text-muted-foreground" />
-        <span className="font-medium">{task.title || task.id}</span>
+    <div className="flex flex-col gap-1.5 rounded-xl border border-border/60 bg-card/40 px-4 py-3 shadow-xs/5">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <ListChecksIcon className="size-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 truncate font-medium">{task.title || task.id}</span>
         <Badge variant="info" size="sm">
           {TASK_LABEL[task.status] ?? task.status}
         </Badge>
         <span className="flex-1" />
-        {task.thread_id ? (
-          <Button
-            size="xs"
-            variant="outline"
-            onClick={() =>
-              void navigate({
-                to: "/$environmentId/$threadId",
-                params: { environmentId: row.environmentId, threadId: task.thread_id! },
-              })
-            }
-          >
-            Watch the build
-          </Button>
-        ) : null}
+        {actions}
       </div>
-      <div className="flex flex-col gap-3 px-4 py-3">{body}</div>
-      {actions ? (
-        <div className="flex items-center justify-end gap-2 border-t border-border/50 px-3 py-2.5">
-          {actions}
-        </div>
+      <p className="text-sm text-muted-foreground">{line}</p>
+      {task.status === "needs_owner" && task.reasons ? (
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer select-none">Why it stopped</summary>
+          <pre className="mt-1 max-h-48 overflow-y-auto rounded-lg border border-border/60 bg-background/60 p-3 font-sans whitespace-pre-wrap">
+            {task.reasons}
+          </pre>
+        </details>
       ) : null}
+      <SpecSheet
+        open={reading}
+        onOpenChange={setReading}
+        title={task.title || task.id}
+        spec={task.spec}
+        checks={task.checks ?? []}
+        environmentId={row.environmentId}
+        footer={
+          task.status === "proposed" ? (
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                onClick={() => void onAct(row, "discard")}
+              >
+                Discard
+              </Button>
+              <Button
+                size="sm"
+                disabled={busy}
+                onClick={() => {
+                  setReading(false);
+                  void onAct(row, "approve");
+                }}
+              >
+                Approve and build
+              </Button>
+            </>
+          ) : null
+        }
+      />
     </div>
   );
 }
