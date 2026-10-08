@@ -53,6 +53,8 @@ export interface InboxTask {
   readonly pr_url?: string | null;
   readonly reasons?: string | null;
   readonly error?: string | null;
+  /** The T3 thread the build runs in, when it runs as one. */
+  readonly thread_id?: string | null;
 }
 export interface InboxConfig {
   readonly configured: boolean;

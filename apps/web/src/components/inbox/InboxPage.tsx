@@ -25,6 +25,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { useNavigate } from "@tanstack/react-router";
+
 import { cn } from "../../lib/utils";
 import { useProjects } from "../../state/entities";
 import { useEnvironments } from "../../state/environments";
@@ -922,6 +924,7 @@ function TaskPanel({
   onRetry: () => void;
 }) {
   const task = row.task!;
+  const navigate = useNavigate();
   const waiting = (text: string) => (
     <p className="flex items-center gap-2 text-sm text-muted-foreground">
       <Spinner className="size-3.5" />
@@ -1043,6 +1046,21 @@ function TaskPanel({
         <Badge variant="info" size="sm">
           {TASK_LABEL[task.status] ?? task.status}
         </Badge>
+        <span className="flex-1" />
+        {task.thread_id ? (
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={() =>
+              void navigate({
+                to: "/$environmentId/$threadId",
+                params: { environmentId: row.environmentId, threadId: task.thread_id! },
+              })
+            }
+          >
+            Watch the build
+          </Button>
+        ) : null}
       </div>
       <div className="flex flex-col gap-3 px-4 py-3">{body}</div>
       {actions ? (

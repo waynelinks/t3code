@@ -32,6 +32,7 @@ interface WorkLink {
     readonly pr_url: string | null;
     readonly review: string | null;
     readonly spec: string | null;
+    readonly thread_id?: string | null;
   };
 }
 
@@ -373,6 +374,11 @@ function LinkRow({
               Approve and build
             </Button>
           </>
+        ) : null}
+        {link.task?.thread_id ? (
+          <Button size="xs" variant="outline" onClick={() => onOpenThread(link.task!.thread_id!)}>
+            Watch
+          </Button>
         ) : null}
         {link.task?.pr_url ? (
           <Button
