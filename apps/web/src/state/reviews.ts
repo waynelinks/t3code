@@ -35,6 +35,13 @@ export interface ReleaseCard {
   readonly prs: ReadonlyArray<ReleasePr>;
   readonly at: number;
   readonly t3_thread?: string | null;
+  /** While it is being reviewed: from the review thread's activity. */
+  readonly progress?: {
+    readonly minutes: number;
+    readonly steps: number;
+    readonly now: string;
+    readonly refused: number;
+  };
   readonly review?: {
     readonly results: ReadonlyArray<ReleaseResult>;
     readonly error: string | null;
@@ -42,6 +49,8 @@ export interface ReleaseCard {
     readonly deferred: boolean;
     readonly t3_thread: string | null;
     readonly summary: string;
+    /** How long the review session took. */
+    readonly seconds?: number | null;
   };
   readonly reply?: {
     readonly status: string;

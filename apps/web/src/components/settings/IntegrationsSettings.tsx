@@ -4,6 +4,7 @@ import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings"
 import { ScopedSwitch } from "./ScopedSwitch";
 import { DeviceHostsSettings } from "./DeviceHostsSettings";
 import { ChiefInboxSettings } from "./ChiefInboxSettings";
+import { ChiefReviewsSettings } from "./ChiefReviewsSettings";
 /**
  * Integrations settings - preferences for surfaces T3 Code embeds rather than
  * owns. Browser is the first section: the defaults a preview tab opens at,
@@ -1448,6 +1449,7 @@ export function IntegrationsSettingsPanel() {
           the preview defaults below are device-local and ignore it. */}
       <ProjectDefaultsSettings category="integrations" />
       <ChiefInboxSettings />
+      <ChiefReviewsSettings />
       <SettingsSection id="browser" title="Browser">
         {previewDefaultsDisabled ? (
           <SettingsUnavailableGroup message="Only available in the desktop app.">

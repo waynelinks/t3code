@@ -2,7 +2,14 @@ import type { EnvironmentId } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import {
   AlertTriangleIcon,
+  CheckIcon,
+  CircleDashedIcon,
+  CircleIcon,
   ExternalLinkIcon,
+  EyeIcon,
+  GitPullRequestIcon,
+  MessageSquareIcon,
+  XIcon,
   LogInIcon,
   PlayIcon,
   RotateCwIcon,
@@ -19,19 +26,11 @@ import {
   useOrganisationLabel,
   useOrganisationScope,
 } from "../../state/organisation";
-import type {
-  ReleaseBoard,
-  ReleaseCard,
-  ReleaseConfig,
-  ReleaseStuck,
-  ReleaseYou,
-} from "../../state/reviews";
+import type { ReleaseBoard, ReleaseCard, ReleaseStuck, ReleaseYou } from "../../state/reviews";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Spinner } from "../ui/spinner";
-import { Switch } from "../ui/switch";
 import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
@@ -44,7 +43,6 @@ const COLUMNS = [
   { id: "reviewing", title: "Reviewing", hint: "A review thread is working on it" },
   { id: "reviewed", title: "Reviewed", hint: "The verdict is on GitHub, or a draft" },
   { id: "replied", title: "Replied", hint: "The requester has the answer in ClickUp" },
-  { id: "others", title: "Handled without you", hint: "Another reviewer, or already answered" },
 ] as const;
 const agoMs = (ms: number | null | undefined) => (ms ? ago(new Date(ms).toISOString()) : "never");
 const fail = (title: string, e: unknown) =>
@@ -53,30 +51,6 @@ const fail = (title: string, e: unknown) =>
     title,
     description: e instanceof Error ? e.message : String(e),
   });
-
-function Card({
-  title,
-  icon,
-  aside,
-  children,
-}: {
-  title: ReactNode;
-  icon?: ReactNode;
-  aside?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className="flex flex-col rounded-xl border border-border/60 bg-card/40 shadow-xs/5">
-      <header className="flex flex-wrap items-center gap-2 border-b border-border/50 px-4 py-2.5 text-sm">
-        {icon}
-        <span className="font-medium">{title}</span>
-        <span className="flex-1" />
-        {aside}
-      </header>
-      <div className="flex flex-col gap-3 px-4 py-3">{children}</div>
-    </section>
-  );
-}
 
 export function ReviewsPage() {
   const navigate = useNavigate();
@@ -106,7 +80,6 @@ export function ReviewsPage() {
   const [board, setBoard] = useState<ReleaseBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const load = useCallback(async () => {
     if (!base) return;
     try {
@@ -157,13 +130,7 @@ export function ReviewsPage() {
     (board?.stuck ?? []).map((s) => [s.thread, s]),
   );
   const count = (id: (typeof COLUMNS)[number]["id"]) =>
-    !board
-      ? 0
-      : id === "you"
-        ? board.you.length
-        : id === "others"
-          ? board.others.length
-          : board.stages[id].length;
+    !board ? 0 : id === "you" ? board.you.length : board.stages[id].length;
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
@@ -236,9 +203,8 @@ export function ReviewsPage() {
         </Button>
         <Button
           size="sm"
-          variant={showSettings ? "secondary" : "ghost"}
-          disabled={!board}
-          onClick={() => setShowSettings((v) => !v)}
+          variant="ghost"
+          onClick={() => void navigate({ to: "/settings/integrations", hash: "chief-pr-reviews" })}
         >
           <SettingsIcon className="size-3.5" />
           Settings
@@ -261,17 +227,22 @@ export function ReviewsPage() {
           </p>
         ) : (
           <>
-            {showSettings || !configured ? (
-              <div className="max-h-[55vh] shrink-0 overflow-y-auto border-b border-border/50 bg-muted/10 px-3 py-3">
-                <SetupCard
-                  base={source.base}
-                  board={board}
-                  busy={busy}
-                  onSave={(changes) => call("/release/config", "PUT", changes)}
-                  onLogin={(check) =>
-                    void call(check ? "/release/login/check" : "/release/login", "POST")
+            {!configured ? (
+              <div className="flex flex-col items-start gap-3 p-6 text-sm">
+                <p className="text-muted-foreground">
+                  PR reviews are not set up for{" "}
+                  {source ? labelFor(source.environmentId) : "this company"} yet: choose the Release
+                  Request channel and the review skills folder.
+                </p>
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    void navigate({ to: "/settings/integrations", hash: "chief-pr-reviews" })
                   }
-                />
+                >
+                  <SettingsIcon className="size-3.5" />
+                  Open the PR review settings
+                </Button>
               </div>
             ) : null}
             {configured && board.login.logged_in !== true && cfg.reply ? (
@@ -302,6 +273,9 @@ export function ReviewsPage() {
                   >
                     <header className="flex shrink-0 items-center gap-2 px-3 pt-2.5 pb-2 text-xs font-medium text-muted-foreground">
                       <span className="truncate uppercase tracking-wide">{col.title}</span>
+                      {col.id === "reviewing" && count("reviewing") > 0 ? (
+                        <Spinner className="size-3 text-info" />
+                      ) : null}
                       <span
                         className={cn(
                           "rounded-full px-1.5 tabular-nums",
@@ -329,20 +303,6 @@ export function ReviewsPage() {
                               })
                             }
                           />
-                        ))
-                      ) : col.id === "others" ? (
-                        board.others.map((o) => (
-                          <div
-                            key={`${o.thread}-${o.github ?? o.repo}-${o.number}`}
-                            className="flex flex-col gap-1 rounded-lg border border-border/60 bg-card px-3 py-2 text-sm shadow-xs/5"
-                          >
-                            <PrLink pr={o} />
-                            <p className="text-xs text-muted-foreground">{o.verdict}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {o.asked_by_name ? `${o.asked_by_name} · ` : ""}
-                              {agoMs(o.last_ask)}
-                            </p>
-                          </div>
                         ))
                       ) : (
                         board.stages[col.id].map((c) => (
@@ -394,6 +354,108 @@ function PrLink({
   );
 }
 
+type Step = "posted" | "draft" | "bailed" | null;
+
+/** "1d 20h ago", "3h ago", "12m ago": how long ago, the way Chief v1 wrote it. */
+function since(ms: number | null | undefined): string {
+  if (!ms) return "";
+  const m = Math.max(0, Math.round((Date.now() - ms) / 60_000));
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d${h % 24 ? ` ${h % 24}h` : ""} ago`;
+}
+
+/** The three steps of a request: asked in ClickUp, the verdict on GitHub, the reply in ClickUp. */
+function Tracker({ steps }: { steps: { asked: boolean; github: Step; reply: Step } }) {
+  const items: ReadonlyArray<[string, Step]> = [
+    ["ClickUp", steps.asked ? "posted" : null],
+    ["GitHub", steps.github],
+    ["ClickUp", steps.reply],
+  ];
+  return (
+    <ol className="flex w-full items-center gap-1.5 text-xs" aria-label="Stages">
+      {items.map(([label, state], i) => (
+        <li key={i} className={cn("flex min-w-0 items-center gap-1.5", i > 0 && "flex-1")}>
+          {i > 0 ? (
+            <span
+              aria-hidden
+              className={cn("h-px min-w-2 flex-1", state ? "bg-success/50" : "bg-foreground/15")}
+            />
+          ) : null}
+          <span
+            className={cn(
+              "flex items-center gap-1",
+              state === "posted"
+                ? "text-success"
+                : state === "draft"
+                  ? "text-warning"
+                  : state === "bailed"
+                    ? "text-destructive"
+                    : "text-muted-foreground",
+            )}
+            title={`${label}: ${state === "posted" ? "done" : state === "draft" ? "a draft, not posted" : state === "bailed" ? "not done" : "not yet"}`}
+          >
+            {state === "posted" ? (
+              <CheckIcon className="size-3.5" />
+            ) : state === "draft" ? (
+              <CircleDashedIcon className="size-3.5" />
+            ) : state === "bailed" ? (
+              <XIcon className="size-3.5" />
+            ) : (
+              <CircleIcon className="size-3.5" />
+            )}
+            {label}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** A link out of the console, as a quiet button. */
+function Open({
+  href,
+  icon,
+  children,
+  label,
+}: {
+  href: string;
+  icon: ReactNode;
+  children?: ReactNode;
+  label?: string;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      aria-label={label}
+      title={label}
+      className={cn(
+        "inline-flex h-8 items-center gap-1.5 rounded-lg bg-foreground/[0.06] text-xs font-medium text-foreground outline-none hover:bg-foreground/[0.1] focus-visible:ring-2 focus-visible:ring-ring/50 [&_svg]:size-3.5",
+        children ? "px-3" : "w-8 justify-center",
+      )}
+    >
+      {icon}
+      {children}
+    </a>
+  );
+}
+
+const VERDICT_TONE: Record<string, string> = {
+  Approved: "bg-success/10 text-success-foreground",
+  "Changes Requested": "bg-warning/10 text-warning-foreground",
+  Bailed: "bg-destructive/10 text-destructive-foreground",
+};
+const VERDICT_DOT: Record<string, string> = {
+  Approved: "bg-success",
+  "Changes Requested": "bg-warning",
+  Bailed: "bg-destructive",
+};
+
 function StageCard({
   card,
   stuck,
@@ -407,88 +469,138 @@ function StageCard({
   onWatch: (threadId: string) => void;
   onRetry: (key: string) => void;
 }) {
+  const [open, setOpen] = useState(false);
   const thread = card.review?.t3_thread ?? card.t3_thread ?? null;
   const results = card.review?.results ?? [];
+  const resultFor = (p: { github: string; number: number }) =>
+    results.find((r) => r.repo === p.github && r.number === p.number) ?? null;
+  const github: Step = !card.review
+    ? null
+    : results.some((r) => r.posted)
+      ? "posted"
+      : card.review.error || results.every((r) => r.verdict === "Bailed")
+        ? "bailed"
+        : "draft";
+  const reply: Step = card.reply?.status === "posted" ? "posted" : stuck ? "bailed" : null;
+  const minutes = card.review?.seconds ? Math.max(1, Math.round(card.review.seconds / 60)) : null;
   return (
     <div
       className={cn(
-        "flex flex-col gap-1.5 rounded-lg border bg-card px-3 py-2.5 text-sm shadow-xs/5",
-        stuck ? "border-warning/50" : "border-border/60",
+        "flex w-full flex-col gap-2.5 rounded-xl bg-card p-3.5 shadow-xs/5 ring-1",
+        card.stage === "reviewing" ? "ring-info/50" : stuck ? "ring-warning/50" : "ring-border/70",
       )}
     >
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        {card.prs.map((p) => (
-          <PrLink key={`${p.github}#${p.number}`} pr={p} />
-        ))}
-        {card.stage === "reviewing" ? <Spinner className="size-3 text-muted-foreground" /> : null}
-      </div>
-      {card.prs.some((p) => p.title) ? (
-        <p className="line-clamp-2 text-xs text-muted-foreground">
-          {card.prs
-            .map((p) => p.title)
-            .filter(Boolean)
-            .join(" · ")}
-        </p>
-      ) : null}
-      <p className="text-xs text-muted-foreground">
-        {card.asked_by_name ? `${card.asked_by_name} · ` : ""}
-        {agoMs(card.at)}
-      </p>
-      {results.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
-          {results.map((r) => (
-            <Badge
-              key={`${r.repo}#${r.number}`}
-              size="sm"
-              variant={
-                r.verdict === "Approved"
-                  ? "success"
-                  : r.verdict === "Changes Requested"
-                    ? "warning"
-                    : "error"
-              }
-              title={r.why}
-            >
-              {card.prs.length > 1 ? `#${r.number} ` : ""}
-              {r.verdict}
-              {r.verdict !== "Bailed"
-                ? r.posted
-                  ? ""
-                  : card.review?.post
-                    ? ", not posted"
-                    : ", draft"
+      <Tracker steps={{ asked: true, github, reply }} />
+      <ul className="flex flex-col gap-1.5">
+        {card.prs.map((p) => {
+          const r = resultFor(p);
+          return (
+            <li key={`${p.github}#${p.number}`} className="flex flex-col gap-1">
+              <a
+                href={p.url || card.link}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm leading-snug font-medium hover:underline"
+              >
+                {p.repo ?? p.github.split("/").pop()}#{p.number}
+                {p.title ? ` · ${p.title}` : ""}
+              </a>
+              {r ? (
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
+                      VERDICT_TONE[r.verdict],
+                    )}
+                    title={r.why}
+                  >
+                    <span className={cn("size-1.5 rounded-full", VERDICT_DOT[r.verdict])} />
+                    {r.verdict}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {r.posted
+                      ? "posted on GitHub"
+                      : card.review?.post
+                        ? "not posted"
+                        : "draft, not posted"}
+                  </span>
+                </span>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+      {card.stage === "reviewing" ? (
+        <div className="flex flex-col gap-1 text-xs">
+          <span className="flex items-center gap-1.5 font-medium text-info">
+            <Spinner className="size-3.5" />
+            Being reviewed now
+            <span className="font-normal text-muted-foreground">
+              · {card.progress?.minutes ??
+                Math.max(0, Math.round((Date.now() - card.at) / 60_000))}{" "}
+              min
+              {card.progress
+                ? ` · ${card.progress.steps} ${card.progress.steps === 1 ? "step" : "steps"}`
                 : ""}
-            </Badge>
-          ))}
+              {card.progress?.refused ? ` · ${card.progress.refused} refused` : ""}
+            </span>
+          </span>
+          {card.progress ? (
+            <span className="text-muted-foreground [overflow-wrap:anywhere]">
+              Now: {card.progress.now}
+            </span>
+          ) : null}
+          <span className="text-muted-foreground">Asked by {card.asked_by_name || "someone"}</span>
         </div>
+      ) : (
+        <span className="text-xs text-muted-foreground">
+          Asked by {card.asked_by_name || "someone"}
+          {card.at ? ` · ${since(card.at)}` : ""}
+          {minutes ? ` · reviewed in ${minutes} min` : ""}
+        </span>
+      )}
+      {card.review?.error ? (
+        <span className="text-xs text-destructive">{card.review.error}</span>
       ) : null}
-      {card.review?.error ? <p className="text-xs text-destructive">{card.review.error}</p> : null}
       {stuck ? (
-        <p className="text-xs text-warning">The reply did not post: {stuck.reply_error}</p>
+        <span className="text-xs text-destructive">ClickUp reply: {stuck.reply_error}</span>
       ) : card.reply && card.reply.status !== "posted" && card.reply.error ? (
-        <p className="text-xs text-warning">Reply not posted yet: {card.reply.error}</p>
+        <span className="text-xs text-destructive">ClickUp reply: {card.reply.error}</span>
       ) : null}
-      {card.stage === "replied" && card.reply ? (
-        <p className="text-xs text-muted-foreground">Replied {agoMs(card.reply.at)}</p>
+      {card.review?.summary ? (
+        <button type="button" onClick={() => setOpen((v) => !v)} className="text-left">
+          <p
+            className={cn(
+              "text-xs leading-relaxed whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere]",
+              !open && "line-clamp-3",
+            )}
+          >
+            {card.review.summary}
+          </p>
+        </button>
       ) : null}
-      <div className="flex flex-wrap gap-1.5 pt-0.5">
+      <div className="flex flex-wrap gap-2 pt-0.5">
+        <Open href={card.link} icon={<MessageSquareIcon />}>
+          Thread in ClickUp
+        </Open>
+        {card.prs.length === 1 && card.prs[0]?.url ? (
+          <Open href={card.prs[0].url} icon={<GitPullRequestIcon />} label="PR on GitHub" />
+        ) : null}
+        {thread ? (
+          <button
+            type="button"
+            onClick={() => onWatch(thread)}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-foreground/[0.06] px-3 text-xs font-medium hover:bg-foreground/[0.1] [&_svg]:size-3.5"
+          >
+            <EyeIcon />
+            Watch
+          </button>
+        ) : null}
         {stuck ? (
           <Button size="xs" disabled={busy} onClick={() => onRetry(stuck.key)}>
             <RotateCwIcon className="size-3" /> Try again
           </Button>
         ) : null}
-        {thread ? (
-          <Button size="xs" variant="outline" onClick={() => onWatch(thread)}>
-            Watch
-          </Button>
-        ) : null}
-        <Button
-          size="xs"
-          variant="ghost"
-          render={<a href={card.link} target="_blank" rel="noreferrer" />}
-        >
-          ClickUp <ExternalLinkIcon className="size-3" />
-        </Button>
       </div>
     </div>
   );
@@ -568,184 +680,5 @@ function YouCard({
         </div>
       )}
     </div>
-  );
-}
-
-function SetupCard({
-  base,
-  board,
-  busy,
-  onSave,
-  onLogin,
-}: {
-  base: string;
-  board: ReleaseBoard;
-  busy: boolean;
-  onSave: (changes: Partial<ReleaseConfig>) => Promise<boolean>;
-  onLogin: (check: boolean) => void;
-}) {
-  const cfg = board.config;
-  const [channels, setChannels] = useState<ReadonlyArray<{ id: string; name: string }>>([]);
-  const [channel, setChannel] = useState(cfg.channel);
-  const [kit, setKit] = useState(cfg.kit_source);
-  const [merger, setMerger] = useState(cfg.merger);
-  useEffect(() => {
-    void inboxRequest<{ channels: { id: string; name: string }[] }>(base, "/config/channels")
-      .then((d) => setChannels(d.channels))
-      .catch(() => setChannels([]));
-  }, [base]);
-  const dirty = channel !== cfg.channel || kit !== cfg.kit_source || merger !== cfg.merger;
-  const ready = Boolean(cfg.channel && cfg.kit_source);
-  const toggle = (k: "enabled" | "review" | "post" | "reply", v: boolean) =>
-    void onSave(
-      k === "review" && !v
-        ? { review: false, post: false, reply: false }
-        : k === "post" && v
-          ? { review: true, post: true }
-          : { [k]: v },
-    );
-  const row = (title: string, description: string, control: ReactNode) => (
-    <div className="flex flex-wrap items-center gap-3 py-2.5">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">{title}</p>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
-      {control}
-    </div>
-  );
-  return (
-    <Card
-      title="PR review settings"
-      icon={<SettingsIcon className="size-4 text-muted-foreground" />}
-    >
-      <div className="flex flex-col divide-y divide-border/50">
-        {row(
-          "Release Request channel",
-          "Where people ask you to review pull requests.",
-          <Select
-            value={channel || "__none"}
-            onValueChange={(v) => typeof v === "string" && setChannel(v === "__none" ? "" : v)}
-          >
-            <SelectTrigger
-              size="sm"
-              className="w-auto min-w-52"
-              aria-label="Release Request channel"
-            >
-              <SelectValue>
-                {channels.find((c) => c.id === channel)?.name ?? (channel || "Choose a channel")}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectPopup alignItemWithTrigger={false}>
-              {channels.map((c) => (
-                <SelectItem hideIndicator key={c.id} value={c.id}>
-                  {c.name || c.id}
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>,
-        )}
-        {row(
-          "Skills folder",
-          "The company's review skills and scripts. Chief keeps a copy and refreshes it every hour.",
-          <Input
-            className="w-full max-w-sm"
-            value={kit}
-            placeholder="/home/wayne/ai-employees/<company>"
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setKit(e.target.value)}
-            aria-label="Skills folder"
-          />,
-        )}
-        {row(
-          "When everything is approved, cc",
-          "The person who merges, mentioned on approved replies. Empty: no cc line.",
-          <Input
-            className="w-full max-w-60"
-            value={merger}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setMerger(e.target.value)}
-            aria-label="cc on approved replies"
-          />,
-        )}
-        {dirty ? (
-          <div className="flex justify-end py-2.5">
-            <Button
-              size="sm"
-              disabled={busy}
-              onClick={() => void onSave({ channel, kit_source: kit, merger })}
-            >
-              Save
-            </Button>
-          </div>
-        ) : null}
-        {board.kit.missing && board.kit.missing.length > 0 ? (
-          <p className="py-2 text-xs text-destructive">
-            The skills folder lacks {board.kit.missing.join(", ")}
-          </p>
-        ) : null}
-        {row(
-          "Check the channel",
-          `Every ${cfg.interval_min} minutes, read the threads that moved.`,
-          <Switch
-            checked={cfg.enabled}
-            disabled={busy || !ready}
-            onCheckedChange={(v) => toggle("enabled", Boolean(v))}
-            aria-label="Check the channel"
-          />,
-        )}
-        {row(
-          "Review requests",
-          "Each request that needs you gets a review thread, with the company's protocol.",
-          <Switch
-            checked={cfg.review}
-            disabled={busy || !ready}
-            onCheckedChange={(v) => toggle("review", Boolean(v))}
-            aria-label="Review requests"
-          />,
-        )}
-        {row(
-          "Post verdicts on GitHub",
-          "As the company's GitHub account, only 09:30 to 17:00. Off: reviews stay drafts.",
-          <Switch
-            checked={cfg.post}
-            disabled={busy || !ready}
-            onCheckedChange={(v) => toggle("post", Boolean(v))}
-            aria-label="Post verdicts on GitHub"
-          />,
-        )}
-        {row(
-          "Reply in ClickUp",
-          "Typed in the requester's thread by Chief's Chrome, with real mentions, then read back.",
-          <Switch
-            checked={cfg.reply}
-            disabled={busy || !ready}
-            onCheckedChange={(v) => toggle("reply", Boolean(v))}
-            aria-label="Reply in ClickUp"
-          />,
-        )}
-        {row(
-          "Chief's Chrome for ClickUp",
-          board.login.busy
-            ? "A Chrome window is open: log in to ClickUp there. It closes by itself."
-            : board.login.logged_in === true
-              ? `Signed in (checked ${agoMs(board.login.at)}).`
-              : board.login.logged_in === false
-                ? `Not signed in${board.login.error ? `: ${board.login.error}` : ""}.`
-                : "Not checked yet. You log in once; Chief never sees the password.",
-          <div className={cn("flex gap-2")}>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={board.login.busy}
-              onClick={() => onLogin(true)}
-            >
-              Check
-            </Button>
-            <Button size="sm" disabled={board.login.busy} onClick={() => onLogin(false)}>
-              <LogInIcon className="size-3.5" />
-              Log in
-            </Button>
-          </div>,
-        )}
-      </div>
-    </Card>
   );
 }
