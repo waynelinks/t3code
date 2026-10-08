@@ -10,6 +10,7 @@ import {
   RefreshCwIcon,
   SendIcon,
   SparklesIcon,
+  StarIcon,
   UndoIcon,
 } from "lucide-react";
 import {
@@ -111,6 +112,9 @@ function readSeen(): Record<string, string> {
   }
 }
 
+/** Rows where someone tags you, writes to you directly or assigns you something. */
+const TAGGED_KINDS = new Set(["chat-mention", "mention", "direct", "assigned"]);
+
 function dayLabel(iso: string): string {
   const d = new Date(iso);
   const today = new Date();
@@ -169,11 +173,17 @@ export function InboxPage() {
   );
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return rows.filter(
+    const shown = rows.filter(
       (r) =>
         r.status === tab &&
         (!q || `${r.who} ${r.title} ${r.body} ${r.organisation}`.toLowerCase().includes(q)),
     );
+    // priority people on top, the rows where they tag you, write to you or assign you first; then newest first
+    const rank = (r: Row) => (r.priority ? (TAGGED_KINDS.has(r.kind) ? 0 : 1) : 2);
+    return shown
+      .map((r, i) => ({ r, i }))
+      .sort((a, b) => rank(a.r) - rank(b.r) || a.i - b.i)
+      .map((x) => x.r);
   }, [rows, tab, query]);
   const selected = visible.find((r) => r.key === selectedKey) ?? null;
   const markSeen = useCallback((row: Row) => {
@@ -391,8 +401,9 @@ export function InboxPage() {
               </li>
             ) : (
               visible.map((row, index) => {
-                const label = dayLabel(row.created_at);
-                const first = index === 0 || dayLabel(visible[index - 1]!.created_at) !== label;
+                const groupOf = (r: Row) => (r.priority ? "Priority" : dayLabel(r.created_at));
+                const label = groupOf(row);
+                const first = index === 0 || groupOf(visible[index - 1]!) !== label;
                 return (
                   <Fragment key={row.key}>
                     {first ? (
@@ -502,6 +513,12 @@ function ListItem({
           />
           <span className="min-w-0 truncate text-xs text-muted-foreground">
             <span className="font-medium text-foreground/80">{row.who || row.source}</span>
+            {row.priority ? (
+              <StarIcon
+                aria-label="Priority"
+                className="ml-1 inline size-3 -translate-y-px fill-warning text-warning"
+              />
+            ) : null}
             {" · "}
             {timeAgo(row.created_at)}
             {showOrganisation ? ` · ${row.organisation}` : ""}

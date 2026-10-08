@@ -215,6 +215,13 @@ function ClickUpRows({ environmentId, label }: { environmentId: EnvironmentId; l
             }
           />
           <WatchedChannelsRow base={base!} watched={config.watch_channels} onChange={load} />
+          <PriorityPeopleRow
+            base={base!}
+            onChange={async () => {
+              await load();
+              void refreshInbox(environmentId);
+            }}
+          />
           <SettingsRow
             title="Done also resolves"
             description="When you press Done on a comment assigned to you, also mark it resolved in ClickUp. Colleagues see it resolved."
@@ -306,6 +313,85 @@ function WatchedChannelsRow({
                   onCheckedChange={(on) => void toggle(c.id, on)}
                 >
                   #{c.name}
+                </MenuCheckboxItem>
+              ))
+            )}
+          </MenuPopup>
+        </Menu>
+      }
+    />
+  );
+}
+
+/** People whose messages go on top of the Inbox, tags and direct messages first. */
+function PriorityPeopleRow({ base, onChange }: { base: string; onChange: () => Promise<void> }) {
+  const [people, setPeople] = useState<ReadonlyArray<{
+    id: string;
+    name: string;
+    picture: string | null;
+  }> | null>(null);
+  const [selected, setSelected] = useState<ReadonlyArray<string>>([]);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try {
+      const data = await inboxRequest<{
+        people: { id: string; name: string; picture: string | null }[];
+        priority: string[];
+      }>(base, "/config/people");
+      setPeople(data.people);
+      setSelected(data.priority);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [base]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const toggle = async (id: string, on: boolean) => {
+    const next = on ? [...selected, id] : selected.filter((x) => x !== id);
+    setSelected(next);
+    try {
+      await inboxRequest(base, "/config/priority", { method: "PUT", body: { ids: next } });
+      await onChange();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+  const names = (people ?? []).filter((p) => selected.includes(p.id)).map((p) => p.name);
+  return (
+    <SettingsRow
+      title="Priority people"
+      description="Their messages stay on top of the Inbox, the ones where they tag you or message you directly first."
+      status={
+        error ? (
+          <span className="text-destructive">{error}</span>
+        ) : selected.length === 0 ? (
+          "Nobody yet"
+        ) : names.length > 0 ? (
+          names.join(", ")
+        ) : (
+          `${selected.length} ${selected.length === 1 ? "person" : "people"}`
+        )
+      }
+      control={
+        <Menu onOpenChange={(open) => (open ? void load() : undefined)}>
+          <MenuTrigger render={<Button size="sm" variant="outline" className="w-full sm:w-auto" />}>
+            Choose people
+          </MenuTrigger>
+          <MenuPopup align="end" className="max-h-80">
+            {people === null ? (
+              <MenuItem disabled>Loading the workspace's people</MenuItem>
+            ) : people.length === 0 ? (
+              <MenuItem disabled>Nobody else in this workspace</MenuItem>
+            ) : (
+              people.map((p) => (
+                <MenuCheckboxItem
+                  key={p.id}
+                  checked={selected.includes(p.id)}
+                  onCheckedChange={(on) => void toggle(p.id, on)}
+                >
+                  {p.name}
                 </MenuCheckboxItem>
               ))
             )}

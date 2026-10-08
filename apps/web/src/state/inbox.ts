@@ -38,6 +38,8 @@ export interface InboxItem {
   readonly context: Record<string, unknown>;
   readonly draft: InboxDraft;
   readonly reply: { readonly sent_at: string; readonly text: string } | null;
+  /** From someone the owner marked as priority (Settings, Integrations, Inbox). */
+  readonly priority?: boolean;
   readonly reply_to?: {
     readonly kind: "task-comment" | "comment-thread" | "channel" | "thread" | "release";
   } | null;
