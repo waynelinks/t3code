@@ -53,6 +53,7 @@ import { toastManager } from "../ui/toast";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { Avatar, IconAction, SearchField, timeAgo, ago } from "./shared";
+import { WorkPanel } from "./WorkPanel";
 
 interface TaskRow extends MyTask {
   readonly environmentId: EnvironmentId;
@@ -1450,6 +1451,14 @@ function TaskDetail({
           </div>
         </div>
         <TriageCard row={row} onData={onData} />
+        <WorkPanel
+          base={row.base}
+          environmentId={row.environmentId}
+          source="mytask"
+          id={row.id}
+          allowBuild
+          statuses={row.statuses}
+        />
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         {detail === null && !error ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">

@@ -49,6 +49,7 @@ import { toastManager } from "../ui/toast";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { Avatar, IconAction, SearchField, timeAgo, ago } from "./shared";
+import { WorkPanel } from "./WorkPanel";
 
 interface Row extends InboxItem {
   readonly environmentId: EnvironmentId;
@@ -662,6 +663,15 @@ function Detail({
             </p>
             <p className="whitespace-pre-wrap">{row.reply.text}</p>
           </div>
+        ) : null}
+        {row.source !== "chief" ? (
+          <WorkPanel
+            base={row.base}
+            environmentId={row.environmentId}
+            source="item"
+            id={row.id}
+            allowBuild={false}
+          />
         ) : null}
         {liveTask ? (
           <TaskPanel row={row} busy={busy} onAct={onAct} onRetry={() => setComposingTask(true)} />
