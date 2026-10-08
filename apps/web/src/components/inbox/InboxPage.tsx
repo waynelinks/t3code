@@ -912,10 +912,11 @@ function TaskComposer({
   const [goal, setGoal] = useState(() => goalFrom(row));
   const [repo, setRepo] = useState<string>("");
   useEffect(() => {
-    // the repository named in the message, else the first
+    // the repository named in the message; with several and none named, the owner chooses
     if (repo && repos.some((r) => r.path === repo)) return;
     const text = `${row.title} ${row.body}`.toLowerCase();
-    setRepo((repos.find((r) => text.includes(r.name.toLowerCase())) ?? repos[0])?.path ?? "");
+    const named = repos.find((r) => text.includes(r.name.toLowerCase()));
+    setRepo((named ?? (repos.length === 1 ? repos[0] : undefined))?.path ?? "");
   }, [repos, repo, row.title, row.body]);
   return (
     <div className="flex flex-col rounded-xl border border-border/60 bg-card/40 shadow-xs/5">
