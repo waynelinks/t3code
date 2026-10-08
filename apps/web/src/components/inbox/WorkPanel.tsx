@@ -4,6 +4,7 @@ import {
   ExternalLinkIcon,
   FileTextIcon,
   HammerIcon,
+  ScrollTextIcon,
   MessageSquareIcon,
   PencilRulerIcon,
 } from "lucide-react";
@@ -22,7 +23,7 @@ import { SpecSheet } from "./SpecSheet";
 
 /** A thread or a Chief build started from a ClickUp task or an Inbox row, as the company service reports it. */
 interface WorkLink {
-  readonly kind: "thread" | "build";
+  readonly kind: "thread" | "build" | "spec";
   readonly id: string;
   readonly repo: string;
   readonly created_at: string;
@@ -34,6 +35,13 @@ interface WorkLink {
     readonly status: string;
     readonly mode: string;
     readonly deleted: boolean;
+  } | null;
+  readonly spec?: {
+    readonly id: string;
+    readonly title: string;
+    readonly status: string;
+    readonly needs_you: boolean;
+    readonly progress: { readonly merged: number; readonly total: number };
   } | null;
   readonly task?: {
     readonly status: string;
@@ -161,9 +169,8 @@ export function WorkPanel({
   useEffect(() => {
     if (buildRepo && buildRepos.some((r) => r.path === buildRepo)) return;
     const text = (hint ?? "").toLowerCase();
-    setBuildRepo(
-      (buildRepos.find((r) => text.includes(r.name.toLowerCase())) ?? buildRepos[0])?.path ?? "",
-    );
+    const named = buildRepos.find((r) => text.includes(r.name.toLowerCase()));
+    setBuildRepo((named ?? (buildRepos.length === 1 ? buildRepos[0] : undefined))?.path ?? "");
   }, [buildRepos, buildRepo, hint]);
   const prefix =
     source === "mytask" ? `/mytasks/${encodeURIComponent(id)}` : `/items/${encodeURIComponent(id)}`;
@@ -216,15 +223,22 @@ export function WorkPanel({
       setBusy(false);
     }
   };
+  const [wholeCompany, setWholeCompany] = useState(true);
   const startBuild = async () => {
     setBusy(true);
     try {
       setLinks(
         (
-          await inboxRequest<{ links: WorkLink[] }>(base, `${prefix}/build`, {
-            method: "POST",
-            body: { repo: buildRepo, ...(goal.trim() ? { goal } : {}) },
-          })
+          await inboxRequest<{ links: WorkLink[] }>(
+            base,
+            wholeCompany ? `${prefix}/spec` : `${prefix}/build`,
+            {
+              method: "POST",
+              body: wholeCompany
+                ? { ...(goal.trim() ? { goal } : {}) }
+                : { repo: buildRepo, ...(goal.trim() ? { goal } : {}) },
+            },
+          )
         ).links,
       );
       setComposing(false);
@@ -303,7 +317,7 @@ export function WorkPanel({
               <Button
                 size="sm"
                 variant="outline"
-                disabled={busy || (!onBuildClick && !buildRepo)}
+                disabled={busy}
                 onClick={() => (onBuildClick ? onBuildClick() : setComposing((v) => !v))}
               >
                 <HammerIcon className="size-3.5" />
@@ -329,30 +343,42 @@ export function WorkPanel({
               onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setGoal(e.target.value)}
             />
             <div className="flex flex-wrap items-center justify-end gap-2">
-              {buildRepos.length > 1 ? (
-                <Select
-                  value={buildRepo}
-                  onValueChange={(v) => typeof v === "string" && setBuildRepo(v)}
-                >
-                  <SelectTrigger size="sm" className="w-auto min-w-40" aria-label="Build in">
-                    <SelectValue>
-                      Build in{" "}
-                      {buildRepos.find((r) => r.path === buildRepo)?.name ?? "a repository"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectPopup alignItemWithTrigger={false}>
-                    {buildRepos.map((r) => (
-                      <SelectItem hideIndicator key={r.path} value={r.path}>
-                        {r.name}
-                      </SelectItem>
-                    ))}
-                  </SelectPopup>
-                </Select>
-              ) : null}
+              <Select
+                value={wholeCompany ? "__company" : buildRepo || "__none"}
+                onValueChange={(v) => {
+                  if (typeof v !== "string") return;
+                  setWholeCompany(v === "__company");
+                  if (v !== "__company" && v !== "__none") setBuildRepo(v);
+                }}
+              >
+                <SelectTrigger size="sm" className="w-auto min-w-44" aria-label="Where to build">
+                  <SelectValue>
+                    {wholeCompany
+                      ? "Whole company"
+                      : buildRepo
+                        ? `Only ${buildRepos.find((r) => r.path === buildRepo)?.name ?? ""}`
+                        : "Choose a repository"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectPopup alignItemWithTrigger={false}>
+                  <SelectItem hideIndicator value="__company">
+                    Whole company
+                  </SelectItem>
+                  {buildRepos.map((r) => (
+                    <SelectItem hideIndicator key={r.path} value={r.path}>
+                      Only {r.name}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
               <Button size="sm" variant="ghost" disabled={busy} onClick={() => setComposing(false)}>
                 Cancel
               </Button>
-              <Button size="sm" disabled={busy || !buildRepo} onClick={() => void startBuild()}>
+              <Button
+                size="sm"
+                disabled={busy || (!wholeCompany && !buildRepo)}
+                onClick={() => void startBuild()}
+              >
                 Write the spec
               </Button>
             </div>
@@ -413,6 +439,37 @@ function LinkRow({
   onPosted: () => void;
 }) {
   const [showSpec, setShowSpec] = useState(false);
+  const navigate = useNavigate();
+  if (link.kind === "spec") {
+    const sp = link.spec;
+    const label = sp
+      ? ({
+          prd: "PRD written",
+          drafting: "Reading the repositories",
+          requirements_to_approve: "Requirements to approve",
+          design_to_approve: "Design to approve",
+          building: `Building, ${sp.progress.merged} of ${sp.progress.total} merged`,
+          done: "Done",
+        }[sp.status] ?? sp.status)
+      : "Spec";
+    return (
+      <li className="flex flex-wrap items-center gap-2 py-2 text-sm">
+        <ScrollTextIcon className="size-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1 truncate">Spec: {sp?.title || link.title || link.id}</span>
+        <Badge variant={sp?.needs_you ? "warning" : "info"} size="sm">
+          {label}
+        </Badge>
+        <span className="text-xs text-muted-foreground">{ago(link.created_at)}</span>
+        <Button
+          size="xs"
+          variant={sp?.needs_you ? "default" : "outline"}
+          onClick={() => void navigate({ to: "/specs", search: { spec: link.id } })}
+        >
+          Open the spec
+        </Button>
+      </li>
+    );
+  }
   if (link.kind === "thread") {
     const status = link.state?.status ?? "unknown";
     return (

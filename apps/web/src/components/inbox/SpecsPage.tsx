@@ -416,7 +416,8 @@ function NewSpec({
   const [prd, setPrd] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (!repo || !repos.some((r) => r.path === repo)) setRepo(repos[0]?.path ?? "");
+    // "" lets each step name its repository: the planner reads them all and decides
+    if (repo && !repos.some((r) => r.path === repo)) setRepo("");
   }, [repos, repo]);
   const create = async () => {
     const base = envs.find((e) => e.env === env)?.base;
@@ -472,13 +473,25 @@ function NewSpec({
               </SelectPopup>
             </Select>
           ) : null}
-          <Select value={repo} onValueChange={(v) => typeof v === "string" && setRepo(v)}>
-            <SelectTrigger size="sm" className="w-auto min-w-48" aria-label="Main repository">
+          <Select
+            value={repo || "__steps"}
+            onValueChange={(v) => typeof v === "string" && setRepo(v === "__steps" ? "" : v)}
+          >
+            <SelectTrigger
+              size="sm"
+              className="w-auto min-w-48"
+              aria-label="Repository for the steps"
+            >
               <SelectValue>
-                {repos.find((r) => r.path === repo)?.name ?? "Choose a repository"}
+                {repo
+                  ? (repos.find((r) => r.path === repo)?.name ?? "Chief decides per step")
+                  : "Chief decides per step"}
               </SelectValue>
             </SelectTrigger>
             <SelectPopup alignItemWithTrigger={false}>
+              <SelectItem hideIndicator value="__steps">
+                Chief decides per step
+              </SelectItem>
               {repos.map((r) => (
                 <SelectItem hideIndicator key={r.path} value={r.path}>
                   {r.name}
@@ -498,7 +511,7 @@ function NewSpec({
           <Button size="sm" variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button size="sm" disabled={busy || !title.trim() || !repo} onClick={() => void create()}>
+          <Button size="sm" disabled={busy || !title.trim()} onClick={() => void create()}>
             Create spec
           </Button>
         </div>

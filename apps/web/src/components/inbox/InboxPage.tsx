@@ -10,6 +10,7 @@ import {
   RefreshCwIcon,
   SendIcon,
   PencilLineIcon,
+  ScrollTextIcon,
   SparklesIcon,
   StarIcon,
   UndoIcon,
@@ -589,6 +590,7 @@ function Detail({
   onBack: () => void;
 }) {
   const [composingTask, setComposingTask] = useState(false);
+  const liveSpec = Boolean(row.spec && row.spec.status !== "done");
   const liveTask = LIVE_TASK(row);
   const replyable = CAN_REPLY(row) && !liveTask;
   const ctx = row.context as { where?: unknown; thread?: unknown };
@@ -711,6 +713,7 @@ function Detail({
         ) : replyable && row.status === "open" ? (
           <Composer row={row} busy={busy} onAct={onAct} />
         ) : null}
+        {row.spec ? <SpecPanel row={row} /> : null}
         {liveTask ? (
           <TaskPanel row={row} busy={busy} onAct={onAct} onRetry={() => setComposingTask(true)} />
         ) : null}
@@ -720,7 +723,7 @@ function Detail({
             environmentId={row.environmentId}
             source="item"
             id={row.id}
-            allowBuild={!liveTask && !composingTask && row.status === "open"}
+            allowBuild={!liveTask && !liveSpec && !composingTask && row.status === "open"}
             onBuildClick={() => setComposingTask(true)}
             hint={`${row.title} ${row.body}`}
             compact
@@ -910,21 +913,21 @@ function TaskComposer({
   const company = useCompanyRepos(row.base);
   const repos = company.repos;
   const [goal, setGoal] = useState(() => goalFrom(row));
+  // "" is the whole company: Chief reads every repository and plans one step per repository
   const [repo, setRepo] = useState<string>("");
   useEffect(() => {
-    // the repository named in the message; with several and none named, the owner chooses
-    if (repo && repos.some((r) => r.path === repo)) return;
-    const text = `${row.title} ${row.body}`.toLowerCase();
-    const named = repos.find((r) => text.includes(r.name.toLowerCase()));
-    setRepo((named ?? (repos.length === 1 ? repos[0] : undefined))?.path ?? "");
-  }, [repos, repo, row.title, row.body]);
+    if (repo && !repos.some((r) => r.path === repo)) setRepo("");
+  }, [repos, repo]);
+  const wholeCompany = repo === "";
   return (
     <div className="flex flex-col rounded-xl border border-border/60 bg-card/40 shadow-xs/5">
       <div className="flex flex-wrap items-center gap-2 border-b border-border/50 px-4 py-2.5 text-sm">
         <ListChecksIcon className="size-4 text-muted-foreground" />
         <span className="font-medium">Let Chief build it</span>
         <span className="text-xs text-muted-foreground">
-          Chief writes a spec with checks first. Nothing is built until you approve it.
+          {wholeCompany
+            ? "Chief reads every repository, writes the requirements and design for you to approve, then builds one step per repository."
+            : "Chief writes a spec with checks for this repository first. Nothing is built until you approve it."}
         </span>
       </div>
       <Textarea
@@ -941,15 +944,22 @@ function TaskComposer({
           </span>
         ) : (
           <Select
-            value={repo}
-            onValueChange={(value) => typeof value === "string" && setRepo(value)}
+            value={repo || "__company"}
+            onValueChange={(value) =>
+              typeof value === "string" && setRepo(value === "__company" ? "" : value)
+            }
           >
             <SelectTrigger size="sm" className="w-full sm:w-64" aria-label="Repository">
               <SelectValue>
-                {repos.find((r) => r.path === repo)?.name ?? "Choose a repository"}
+                {wholeCompany
+                  ? "Whole company"
+                  : (repos.find((r) => r.path === repo)?.name ?? "Whole company")}
               </SelectValue>
             </SelectTrigger>
             <SelectPopup alignItemWithTrigger={false}>
+              <SelectItem hideIndicator value="__company">
+                Whole company
+              </SelectItem>
               {repos.map((r) => (
                 <SelectItem hideIndicator key={r.path} value={r.path}>
                   {r.name}
@@ -964,14 +974,68 @@ function TaskComposer({
         </Button>
         <Button
           size="sm"
-          disabled={busy || !repo || goal.trim().length < 10}
+          disabled={busy || goal.trim().length < 10}
           onClick={() =>
-            void onAct(row, "task", { goal, repo, title: row.title }).then((ok) => ok && onClose())
+            void (
+              wholeCompany
+                ? onAct(row, "spec", { goal, title: row.title })
+                : onAct(row, "task", { goal, repo, title: row.title })
+            ).then((ok) => ok && onClose())
           }
         >
           Write the spec
         </Button>
       </div>
+    </div>
+  );
+}
+
+const SPEC_STATUS: Record<string, string> = {
+  prd: "PRD written",
+  drafting: "Reading the repositories",
+  requirements_to_approve: "Requirements to approve",
+  design_to_approve: "Design to approve",
+  building: "Building",
+  done: "Done",
+};
+
+/** A spec started from this row, across the company: its state, and the way to the Specs page. */
+function SpecPanel({ row }: { row: Row }) {
+  const navigate = useNavigate();
+  const spec = row.spec!;
+  const line =
+    spec.status === "drafting"
+      ? "Chief is reading every repository and writing the requirements, the design and one step per repository."
+      : spec.status === "requirements_to_approve"
+        ? "The requirements are written. Read them on the Specs page and approve them."
+        : spec.status === "design_to_approve"
+          ? "The design is written. Read it on the Specs page and approve it."
+          : spec.status === "building"
+            ? `${spec.progress.merged} of ${spec.progress.total} steps merged.`
+            : spec.status === "done"
+              ? "Every step is merged."
+              : "The PRD is written.";
+  return (
+    <div className="flex flex-col gap-1.5 rounded-xl border border-border/60 bg-card/40 px-4 py-3 shadow-xs/5">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <ScrollTextIcon className="size-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 truncate font-medium">{spec.title}</span>
+        <Badge variant={spec.needs_you ? "warning" : "info"} size="sm">
+          {SPEC_STATUS[spec.status] ?? spec.status}
+        </Badge>
+        <span className="flex-1" />
+        <Button
+          size="xs"
+          variant={spec.needs_you ? "default" : "outline"}
+          onClick={() => void navigate({ to: "/specs", search: { spec: spec.id } })}
+        >
+          Open the spec
+        </Button>
+      </div>
+      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+        {spec.status === "drafting" ? <Spinner className="size-3.5" /> : null}
+        {line}
+      </p>
     </div>
   );
 }

@@ -48,6 +48,14 @@ export interface InboxItem {
     readonly kind: "task-comment" | "comment-thread" | "channel" | "thread" | "release";
   } | null;
   readonly task?: InboxTask | null;
+  /** A spec started from this row: Chief reads every repository and plans one step per repository. */
+  readonly spec?: {
+    readonly id: string;
+    readonly title: string;
+    readonly status: string;
+    readonly needs_you: boolean;
+    readonly progress: { readonly merged: number; readonly total: number };
+  } | null;
 }
 /** A chief-task started from (or found by) the inbox: spec, approval, run, draft pull request. */
 export interface InboxTask {
