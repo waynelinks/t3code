@@ -17,6 +17,12 @@ export function timeAgo(iso: string): string {
   return `${Math.round(hours / 24)}d`;
 }
 
+/** "just now" or "5m ago", so a sentence never reads "now ago". */
+export function ago(iso: string): string {
+  const t = timeAgo(iso);
+  return t === "now" ? "just now" : `${t} ago`;
+}
+
 function initials(name: string): string {
   const parts = name
     .replace(/[^\p{L}\p{N} ]/gu, " ")

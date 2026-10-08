@@ -48,7 +48,7 @@ import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
-import { Avatar, IconAction, SearchField, timeAgo } from "./shared";
+import { Avatar, IconAction, SearchField, timeAgo, ago } from "./shared";
 
 interface Row extends InboxItem {
   readonly environmentId: EnvironmentId;
@@ -320,7 +320,7 @@ export function InboxPage() {
         <div className="min-w-0 flex-1" />
         {lastChecked ? (
           <span className="hidden text-xs text-muted-foreground sm:inline">
-            Checked {timeAgo(lastChecked) === "now" ? "just now" : `${timeAgo(lastChecked)} ago`}
+            Checked {ago(lastChecked)}
           </span>
         ) : null}
         <Button variant="ghost" size="sm" disabled={checking} onClick={() => void checkNow()}>
@@ -658,7 +658,7 @@ function Detail({
         {row.reply ? (
           <div className="rounded-xl border border-border/60 bg-muted/20 shadow-xs/5 p-4 text-sm">
             <p className="mb-1 text-xs text-muted-foreground">
-              You replied {timeAgo(row.reply.sent_at)} ago
+              You replied {ago(row.reply.sent_at)}
             </p>
             <p className="whitespace-pre-wrap">{row.reply.text}</p>
           </div>

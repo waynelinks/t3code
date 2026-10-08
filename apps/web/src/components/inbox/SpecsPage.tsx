@@ -44,7 +44,7 @@ import { Spinner } from "../ui/spinner";
 import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
-import { IconAction, SearchField, timeAgo } from "./shared";
+import { IconAction, SearchField, timeAgo, ago } from "./shared";
 
 type Selection =
   | { readonly kind: "spec"; readonly env: EnvironmentId; readonly id: string }
@@ -581,9 +581,8 @@ function ConstitutionDetail({
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">Constitution</p>
           <p className="truncate text-xs text-muted-foreground">
-            {label} ·{" "}
-            {data?.updated_at ? `saved ${timeAgo(data.updated_at)} ago` : "not written yet"} · every
-            spec, step, change and review is held to it
+            {label} · {data?.updated_at ? `saved ${ago(data.updated_at)}` : "not written yet"} ·
+            every spec, step, change and review is held to it
           </p>
         </div>
         <IconAction label="Close" onClick={onClose}>
@@ -603,7 +602,7 @@ function ConstitutionDetail({
             icon={<ScrollTextIcon className="size-4 text-muted-foreground" />}
             aside={
               data.draft.at ? (
-                <span className="text-xs text-muted-foreground">{timeAgo(data.draft.at)} ago</span>
+                <span className="text-xs text-muted-foreground">{ago(data.draft.at)}</span>
               ) : null
             }
             footer={
@@ -804,7 +803,7 @@ function SpecDetail({
           <p className="truncate text-sm font-medium">{spec.title}</p>
           <p className="truncate text-xs text-muted-foreground">
             {STATUS_LABEL[spec.status] ?? spec.status} · {repoName(spec.repo)} · updated{" "}
-            {timeAgo(spec.updated_at)} ago
+            {ago(spec.updated_at)}
           </p>
         </div>
         {spec.progress.total > 0 ? (
@@ -891,7 +890,7 @@ function SpecDetail({
             aside={
               approvedDesign ? (
                 <Badge variant="success" size="sm">
-                  Approved {timeAgo(spec.approvals.design!)} ago
+                  Approved {ago(spec.approvals.design!)}
                 </Badge>
               ) : null
             }
@@ -1120,7 +1119,7 @@ function RequirementsCard({
         <>
           {approved ? (
             <Badge variant="success" size="sm">
-              Approved {timeAgo(spec.approvals.requirements!)} ago
+              Approved {ago(spec.approvals.requirements!)}
             </Badge>
           ) : null}
           {editing ? null : (
@@ -1349,7 +1348,7 @@ function StepRow({
               {ev.acceptance_cases ? ` · ${ev.acceptance_cases} acceptance cases` : ""}
               {ev.attempts ? ` · ${ev.attempts} attempts` : ""}
               {ev.review ? ` · review: ${ev.review}` : ""}
-              {step.merged_at ? ` · merged ${timeAgo(step.merged_at)} ago` : ""}
+              {step.merged_at ? ` · merged ${ago(step.merged_at)}` : ""}
             </p>
           ) : null}
           {state === "spec_to_approve" && ev?.spec ? (

@@ -47,6 +47,12 @@ const applyDevelopmentIconOverrides = Effect.fn("applyDevelopmentIconOverrides")
   const path = yield* Path.Path;
   const fs = yield* FileSystem.FileSystem;
 
+  // Chief: a rebranded build keeps its own icons instead of T3's development ones.
+  if (process.env.T3_SKIP_ICON_OVERRIDES === "1") {
+    yield* Effect.log("[cli] Kept the web build's own icons (T3_SKIP_ICON_OVERRIDES=1)");
+    return;
+  }
+
   for (const override of DEVELOPMENT_ICON_OVERRIDES) {
     const sourcePath = path.join(repoRoot, override.sourceRelativePath);
     const targetPath = path.join(serverDir, override.targetRelativePath);

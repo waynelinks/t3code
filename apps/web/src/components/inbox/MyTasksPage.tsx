@@ -52,7 +52,7 @@ import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
-import { Avatar, IconAction, SearchField, timeAgo } from "./shared";
+import { Avatar, IconAction, SearchField, timeAgo, ago } from "./shared";
 
 interface TaskRow extends MyTask {
   readonly environmentId: EnvironmentId;
@@ -667,7 +667,7 @@ export function MyTasksPage() {
         <div className="min-w-0 flex-1" />
         {lastChecked ? (
           <span className="hidden text-xs text-muted-foreground sm:inline">
-            Checked {timeAgo(lastChecked) === "now" ? "just now" : `${timeAgo(lastChecked)} ago`}
+            Checked {ago(lastChecked)}
           </span>
         ) : null}
         <ToggleGroup
@@ -1195,7 +1195,7 @@ function TriageCard({ row, onData }: { row: TaskRow; onData: (body: MyTasksBody)
   if (t.state === "applied") {
     return (
       <div className="flex items-center justify-between gap-2 rounded-xl border border-border/60 bg-card/40 px-4 py-3 text-xs text-muted-foreground shadow-xs/5">
-        Recommendation applied {timeAgo(t.at)} ago.
+        Recommendation applied {ago(t.at)}.
         <Button
           size="xs"
           variant="ghost"
@@ -1216,7 +1216,7 @@ function TriageCard({ row, onData }: { row: TaskRow; onData: (body: MyTasksBody)
           <span className="text-xs text-muted-foreground">confidence {t.confidence}</span>
         ) : null}
         <span className="flex-1" />
-        <span className="text-xs text-muted-foreground">checked {timeAgo(t.at)} ago</span>
+        <span className="text-xs text-muted-foreground">checked {ago(t.at)}</span>
       </div>
       <div className="flex flex-col gap-3 px-4 py-3">
         {t.summary ? <p className="text-sm">{t.summary}</p> : null}
