@@ -9,6 +9,7 @@ import {
   ListChecksIcon,
   RefreshCwIcon,
   SendIcon,
+  PencilLineIcon,
   SparklesIcon,
   StarIcon,
   UndoIcon,
@@ -731,6 +732,13 @@ function Composer({ row, busy, onAct }: { row: Row; busy: boolean; onAct: Act })
   const drafting = row.draft.state === "pending";
   const hasDraft = row.draft.state === "ready" || row.draft.state === "failed";
   const canSend = !busy && !drafting && text.trim().length > 0;
+  // the drafted text, as written for you and not yet changed: shown in its own colour so it reads as a draft
+  const untouchedDraft =
+    row.draft.state === "ready" &&
+    !row.draft.edited &&
+    text.trim() !== "" &&
+    text === row.draft.text;
+  const editedDraft = hasDraft && !untouchedDraft && text.trim() !== "";
   const target =
     row.reply_to?.kind === "release"
       ? "the request's thread, typed with a mention"
@@ -771,11 +779,26 @@ function Composer({ row, busy, onAct }: { row: Row; busy: boolean; onAct: Act })
           ))}
         </ul>
       ) : null}
+      {untouchedDraft || editedDraft ? (
+        <div
+          className={cn(
+            "flex items-center gap-1.5 px-4 pt-3 text-xs font-medium",
+            untouchedDraft ? "text-info-foreground" : "text-muted-foreground",
+          )}
+        >
+          <PencilLineIcon className="size-3.5" />
+          {untouchedDraft ? "Draft · edit it, or send as is" : "Edited draft · not sent yet"}
+        </div>
+      ) : null}
       <Textarea
         id="inbox-reply"
         unstyled
         value={text}
-        className="block w-full [&_textarea]:min-h-36 [&_textarea]:resize-none [&_textarea]:bg-transparent [&_textarea]:px-4 [&_textarea]:py-3 [&_textarea]:text-sm [&_textarea]:leading-relaxed"
+        className={cn(
+          "block w-full [&_textarea]:min-h-36 [&_textarea]:resize-none [&_textarea]:bg-transparent [&_textarea]:px-4 [&_textarea]:py-3 [&_textarea]:text-sm [&_textarea]:leading-relaxed",
+          untouchedDraft &&
+            "mx-3 mt-2 mb-1 w-auto rounded-lg border border-info/25 bg-info/[0.06] [&_textarea]:px-3 [&_textarea]:py-2.5 [&_textarea]:text-info-foreground",
+        )}
         placeholder={
           drafting ? "Drafting a reply from the code" : "Write a reply, or draft one from the code"
         }
