@@ -3,9 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   AlertTriangleIcon,
   ExternalLinkIcon,
-  GitPullRequestArrowIcon,
   LogInIcon,
-  MessageSquareIcon,
   PlayIcon,
   RotateCwIcon,
   SendIcon,
@@ -21,7 +19,13 @@ import {
   useOrganisationLabel,
   useOrganisationScope,
 } from "../../state/organisation";
-import type { ReleaseBoard, ReleaseCard, ReleaseConfig, ReleaseYou } from "../../state/reviews";
+import type {
+  ReleaseBoard,
+  ReleaseCard,
+  ReleaseConfig,
+  ReleaseStuck,
+  ReleaseYou,
+} from "../../state/reviews";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -33,12 +37,15 @@ import { toastManager } from "../ui/toast";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { ago } from "./shared";
 
-const STAGES: ReadonlyArray<{ id: ReleaseCard["stage"]; title: string; hint: string }> = [
+/** The board's columns, left to right: what waits on you, then a request's way through. */
+const COLUMNS = [
+  { id: "you", title: "Needs you", hint: "Only you can answer these" },
   { id: "requested", title: "Requested", hint: "Asked in the channel, needs your review" },
   { id: "reviewing", title: "Reviewing", hint: "A review thread is working on it" },
-  { id: "reviewed", title: "Reviewed", hint: "The verdict is on GitHub (or a draft)" },
+  { id: "reviewed", title: "Reviewed", hint: "The verdict is on GitHub, or a draft" },
   { id: "replied", title: "Replied", hint: "The requester has the answer in ClickUp" },
-];
+  { id: "others", title: "Handled without you", hint: "Another reviewer, or already answered" },
+] as const;
 const agoMs = (ms: number | null | undefined) => (ms ? ago(new Date(ms).toISOString()) : "never");
 const fail = (title: string, e: unknown) =>
   toastManager.add({
@@ -72,6 +79,7 @@ function Card({
 }
 
 export function ReviewsPage() {
+  const navigate = useNavigate();
   const feeds = useInboxFeeds();
   const scope = useOrganisationScope();
   const { environments } = useEnvironments();
@@ -80,57 +88,27 @@ export function ReviewsPage() {
     () => feeds.filter((f) => inOrganisationScope(scope, f.environmentId) && !f.error),
     [feeds, scope],
   );
-  const labelFor = (env: EnvironmentId) =>
-    organisationLabel(env, environments.find((e) => e.environmentId === env)?.label ?? env);
-  return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
-      <WorkspacePageHeader>
-        <h1 className="text-sm font-medium">PR reviews</h1>
-        <span className="truncate text-sm text-muted-foreground">
-          {scope === "all" ? "All organisations" : labelFor(scope)}
-        </span>
-        <div className="min-w-0 flex-1" />
-      </WorkspacePageHeader>
-      <div className="min-h-0 flex-1 overflow-y-auto border-t border-border/50">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-5 sm:px-6">
-          {sources.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No company service is answering for this organisation.
-            </p>
-          ) : (
-            sources.map((f) => (
-              <CompanyReviews
-                key={f.environmentId}
-                base={f.base}
-                env={f.environmentId}
-                label={labelFor(f.environmentId)}
-                showLabel={sources.length > 1}
-              />
-            ))
-          )}
-        </div>
-      </div>
-    </div>
+  const labelFor = useCallback(
+    (env: EnvironmentId) =>
+      organisationLabel(env, environments.find((e) => e.environmentId === env)?.label ?? env),
+    [environments, organisationLabel],
   );
-}
+  // One board at a time: the organisation's company, or (all organisations) the one chosen here.
+  const [picked, setPicked] = useState<EnvironmentId | null>(null);
+  const source =
+    sources.find((f) => f.environmentId === picked) ??
+    sources.find((f) => f.health?.release?.enabled) ??
+    sources[0] ??
+    null;
+  const base = source?.base ?? null;
+  const env = source?.environmentId ?? null;
 
-function CompanyReviews({
-  base,
-  env,
-  label,
-  showLabel,
-}: {
-  base: string;
-  env: EnvironmentId;
-  label: string;
-  showLabel: boolean;
-}) {
-  const navigate = useNavigate();
   const [board, setBoard] = useState<ReleaseBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const load = useCallback(async () => {
+    if (!base) return;
     try {
       setBoard(await inboxRequest<ReleaseBoard>(base, "/release"));
       setError(null);
@@ -138,6 +116,7 @@ function CompanyReviews({
       setError(e instanceof Error ? e.message : String(e));
     }
   }, [base]);
+  useEffect(() => setBoard(null), [base]);
   const live = Boolean(
     board?.running || board?.login.busy || (board?.stages.reviewing.length ?? 0) > 0,
   );
@@ -147,6 +126,7 @@ function CompanyReviews({
     return () => clearInterval(t);
   }, [load, live]);
   const call = async (path: string, method: string, body?: unknown) => {
+    if (!base) return false;
     setBusy(true);
     try {
       setBoard(
@@ -156,7 +136,7 @@ function CompanyReviews({
           body === undefined ? { method } : { method, body },
         ),
       );
-      void refreshInbox(env);
+      if (env) void refreshInbox(env);
       return true;
     } catch (e) {
       fail("That did not work", e);
@@ -165,217 +145,230 @@ function CompanyReviews({
       setBusy(false);
     }
   };
-  const watch = (threadId: string) =>
-    void navigate({ to: "/$environmentId/$threadId", params: { environmentId: env, threadId } });
+  const watch = (threadId: string) => {
+    if (env)
+      void navigate({ to: "/$environmentId/$threadId", params: { environmentId: env, threadId } });
+  };
 
-  if (error && !board)
-    return (
-      <p className="text-sm text-destructive">
-        {label}: {error}
-      </p>
-    );
-  if (!board) {
-    return (
-      <p className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Spinner className="size-3.5" /> Loading PR reviews
-      </p>
-    );
-  }
-  const cfg = board.config;
-  const configured = Boolean(cfg.channel && cfg.kit_source);
-  const lastRun = board.runs[0];
+  const cfg = board?.config ?? null;
+  const configured = Boolean(cfg?.channel && cfg?.kit_source);
+  const lastRun = board?.runs[0];
+  const stuckByThread = new Map<string, ReleaseStuck>(
+    (board?.stuck ?? []).map((s) => [s.thread, s]),
+  );
+  const count = (id: (typeof COLUMNS)[number]["id"]) =>
+    !board
+      ? 0
+      : id === "you"
+        ? board.you.length
+        : id === "others"
+          ? board.others.length
+          : board.stages[id].length;
+
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-2">
-        {showLabel ? <h2 className="text-sm font-medium">{label}</h2> : null}
-        <Badge variant={cfg.enabled ? "success" : "secondary"} size="sm">
-          {cfg.enabled ? `Checks every ${cfg.interval_min} min` : "Not checking"}
-        </Badge>
-        <Badge
-          variant={!cfg.review ? "secondary" : cfg.post && cfg.reply ? "info" : "warning"}
-          size="sm"
-        >
-          {!cfg.review
-            ? "Reviews off"
-            : cfg.post && cfg.reply
-              ? "Reviews, posts and replies"
-              : cfg.post
-                ? "Posts on GitHub, no ClickUp replies"
-                : "Reviews as drafts"}
-        </Badge>
-        <Badge variant={board.window_open ? "success" : "secondary"} size="sm">
-          {board.window_open ? "Posting window open" : "Outside 09:30 to 17:00: posts wait"}
-        </Badge>
-        <span className="flex-1" />
-        <span className="text-xs text-muted-foreground">
-          {board.running ? "Checking the channel now" : `Last check ${agoMs(lastRun?.at)}`}
-          {lastRun?.error ? `: ${lastRun.error}` : ""}
-        </span>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
+      <WorkspacePageHeader>
+        <h1 className="text-sm font-medium">PR reviews</h1>
+        {sources.length > 1 && source ? (
+          <Select
+            value={source.environmentId}
+            onValueChange={(v) => typeof v === "string" && setPicked(v as EnvironmentId)}
+          >
+            <SelectTrigger size="sm" className="w-auto min-w-36" aria-label="Company">
+              <SelectValue>{labelFor(source.environmentId)}</SelectValue>
+            </SelectTrigger>
+            <SelectPopup alignItemWithTrigger={false}>
+              {sources.map((f) => (
+                <SelectItem hideIndicator key={f.environmentId} value={f.environmentId}>
+                  {labelFor(f.environmentId)}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        ) : (
+          <span className="truncate text-sm text-muted-foreground">
+            {source ? labelFor(source.environmentId) : ""}
+          </span>
+        )}
+        {cfg ? (
+          <div className="hidden items-center gap-1.5 lg:flex">
+            <Badge variant={cfg.enabled ? "success" : "secondary"} size="sm">
+              {cfg.enabled ? `Checks every ${cfg.interval_min} min` : "Not checking"}
+            </Badge>
+            <Badge
+              variant={!cfg.review ? "secondary" : cfg.post && cfg.reply ? "info" : "warning"}
+              size="sm"
+            >
+              {!cfg.review
+                ? "Reviews off"
+                : cfg.post && cfg.reply
+                  ? "Reviews, posts and replies"
+                  : cfg.post
+                    ? "Posts on GitHub, no ClickUp replies"
+                    : "Reviews as drafts"}
+            </Badge>
+            <Badge variant={board?.window_open ? "success" : "secondary"} size="sm">
+              {board?.window_open ? "Posting window open" : "Posts wait for 09:30 to 17:00"}
+            </Badge>
+          </div>
+        ) : null}
+        <div className="min-w-0 flex-1" />
+        {board ? (
+          <span
+            className="hidden truncate text-xs text-muted-foreground md:inline"
+            title={lastRun?.error ?? ""}
+          >
+            {board.running
+              ? "Checking the channel now"
+              : lastRun
+                ? `Checked ${agoMs(lastRun.at)}: ${lastRun.threads} threads${lastRun.failed ? `, ${lastRun.failed} to retry` : ""}`
+                : "Not checked yet"}
+          </span>
+        ) : null}
         <Button
           size="sm"
           variant="outline"
-          disabled={busy || board.running || !configured}
+          disabled={busy || !board || board.running || !configured}
           onClick={() => void call("/release/run", "POST")}
         >
-          {board.running ? <Spinner className="size-3.5" /> : <PlayIcon className="size-3.5" />}
+          {board?.running ? <Spinner className="size-3.5" /> : <PlayIcon className="size-3.5" />}
           Check now
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => setShowSettings((v) => !v)}>
+        <Button
+          size="sm"
+          variant={showSettings ? "secondary" : "ghost"}
+          disabled={!board}
+          onClick={() => setShowSettings((v) => !v)}
+        >
           <SettingsIcon className="size-3.5" />
           Settings
         </Button>
-      </div>
-      {showSettings || !configured ? (
-        <SetupCard
-          base={base}
-          board={board}
-          busy={busy}
-          onSave={(changes) => call("/release/config", "PUT", changes)}
-          onLogin={(check) => void call(check ? "/release/login/check" : "/release/login", "POST")}
-        />
-      ) : null}
-      {configured && board.login.logged_in !== true && cfg.reply ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-warning/40 bg-warning/8 px-4 py-2.5 text-sm">
-          <AlertTriangleIcon className="size-4 text-warning" />
-          Replies need Chief's Chrome signed in to ClickUp.
-          <span className="flex-1" />
-          <Button
-            size="xs"
-            disabled={board.login.busy}
-            onClick={() => void call("/release/login", "POST")}
-          >
-            <LogInIcon className="size-3" />
-            {board.login.busy ? "Window open" : "Log in to ClickUp"}
-          </Button>
-        </div>
-      ) : null}
-      {configured ? (
-        <>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {STAGES.map((s) => (
-              <div
-                key={s.id}
-                className="flex min-w-0 flex-col gap-2 rounded-xl border border-border/50 bg-muted/20 p-2"
-              >
-                <div className="flex items-center gap-2 px-1.5 pt-0.5 text-xs font-medium text-muted-foreground">
-                  <span className="uppercase tracking-wide">{s.title}</span>
-                  <span>{board.stages[s.id].length}</span>
-                </div>
-                {board.stages[s.id].length === 0 ? (
-                  <p className="px-1.5 pb-1 text-xs text-muted-foreground/70">{s.hint}</p>
-                ) : (
-                  board.stages[s.id].map((c) => (
-                    <StageCard key={`${c.stage}-${c.thread}`} card={c} onWatch={watch} />
-                  ))
-                )}
+      </WorkspacePageHeader>
+      <div className="flex min-h-0 flex-1 flex-col border-t border-border/50">
+        {!source && feeds.length === 0 ? (
+          <p className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
+            <Spinner className="size-3.5" /> Loading PR reviews
+          </p>
+        ) : !source ? (
+          <p className="p-6 text-sm text-muted-foreground">
+            No company service is answering for this organisation.
+          </p>
+        ) : error && !board ? (
+          <p className="p-6 text-sm text-destructive">{error}</p>
+        ) : !board || !cfg ? (
+          <p className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
+            <Spinner className="size-3.5" /> Loading PR reviews
+          </p>
+        ) : (
+          <>
+            {showSettings || !configured ? (
+              <div className="max-h-[55vh] shrink-0 overflow-y-auto border-b border-border/50 bg-muted/10 px-3 py-3">
+                <SetupCard
+                  base={source.base}
+                  board={board}
+                  busy={busy}
+                  onSave={(changes) => call("/release/config", "PUT", changes)}
+                  onLogin={(check) =>
+                    void call(check ? "/release/login/check" : "/release/login", "POST")
+                  }
+                />
               </div>
-            ))}
-          </div>
-          {board.you.length > 0 ? (
-            <Card
-              title="Needs you"
-              icon={<MessageSquareIcon className="size-4 text-muted-foreground" />}
-              aside={
-                <span className="text-xs text-muted-foreground">
-                  Chief does not answer these for you
-                </span>
-              }
-            >
-              <ul className="flex flex-col divide-y divide-border/50">
-                {board.you.map((it) => (
-                  <YouRow
-                    key={it.id}
-                    item={it}
-                    busy={busy}
-                    windowOpen={board.window_open}
-                    onSend={(text) =>
-                      call(`/release/you/${encodeURIComponent(it.id)}/send`, "POST", { text })
-                    }
-                  />
-                ))}
-              </ul>
-            </Card>
-          ) : null}
-          {board.stuck.length > 0 ? (
-            <Card
-              title="Replies that did not post"
-              icon={<AlertTriangleIcon className="size-4 text-warning" />}
-            >
-              <ul className="flex flex-col divide-y divide-border/50">
-                {board.stuck.map((s) => (
-                  <li key={s.key} className="flex flex-col gap-1.5 py-2 text-sm">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">{s.prs.join(", ")}</span>
-                      <span className="text-xs text-muted-foreground">
-                        for {s.asked_by_name || "the requester"}
-                      </span>
-                      <span className="flex-1" />
-                      <Button
-                        size="xs"
-                        variant="outline"
-                        render={<a href={s.link} target="_blank" rel="noreferrer" />}
-                      >
-                        Thread <ExternalLinkIcon className="size-3" />
-                      </Button>
-                      <Button
-                        size="xs"
-                        disabled={busy}
-                        onClick={() =>
-                          void call(`/release/replies/${encodeURIComponent(s.key)}/approve`, "POST")
-                        }
-                      >
-                        <RotateCwIcon className="size-3" /> Try again
-                      </Button>
-                    </div>
-                    <p className="text-xs text-destructive">{s.reply_error}</p>
-                    <pre className="whitespace-pre-wrap rounded-lg border border-border/60 bg-background/60 p-2 font-sans text-xs">
-                      {s.text}
-                    </pre>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          ) : null}
-          {board.others.length > 0 ? (
-            <Card
-              title="Handled without you"
-              icon={<GitPullRequestArrowIcon className="size-4 text-muted-foreground" />}
-              aside={
-                <span className="text-xs text-muted-foreground">Last {board.others.length}</span>
-              }
-            >
-              <ul className="flex flex-col gap-1 text-sm">
-                {board.others.slice(0, 12).map((o) => (
-                  <li
-                    key={`${o.thread}-${o.github ?? o.repo}-${o.number}`}
-                    className="flex flex-wrap items-center gap-2"
+            ) : null}
+            {configured && board.login.logged_in !== true && cfg.reply ? (
+              <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-warning/30 bg-warning/8 px-4 py-2 text-sm">
+                <AlertTriangleIcon className="size-4 text-warning" />
+                Replies need Chief's Chrome signed in to ClickUp.
+                <span className="flex-1" />
+                <Button
+                  size="xs"
+                  disabled={board.login.busy}
+                  onClick={() => void call("/release/login", "POST")}
+                >
+                  <LogInIcon className="size-3" />
+                  {board.login.busy ? "Window open" : "Log in to ClickUp"}
+                </Button>
+              </div>
+            ) : null}
+            {configured ? (
+              <div className="flex min-h-0 flex-1 gap-2.5 overflow-x-auto p-3">
+                {COLUMNS.map((col) => (
+                  <section
+                    key={col.id}
+                    className={cn(
+                      "flex min-h-0 basis-0 flex-col rounded-xl border border-border/50 bg-muted/20",
+                      // Needs you holds answer boxes: it gets more room than the others
+                      col.id === "you" ? "min-w-[15rem] flex-[1.6]" : "min-w-[10.5rem] flex-1",
+                    )}
                   >
-                    <PrLink pr={o} />
-                    <span className="text-xs text-muted-foreground">{o.verdict}</span>
-                    <span className="flex-1" />
-                    <span className="text-xs text-muted-foreground">{agoMs(o.last_ask)}</span>
-                  </li>
+                    <header className="flex shrink-0 items-center gap-2 px-3 pt-2.5 pb-2 text-xs font-medium text-muted-foreground">
+                      <span className="truncate uppercase tracking-wide">{col.title}</span>
+                      <span
+                        className={cn(
+                          "rounded-full px-1.5 tabular-nums",
+                          col.id === "you" && count("you") > 0
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted",
+                        )}
+                      >
+                        {count(col.id)}
+                      </span>
+                    </header>
+                    <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
+                      {count(col.id) === 0 ? (
+                        <p className="px-1.5 text-xs text-muted-foreground/70">{col.hint}</p>
+                      ) : col.id === "you" ? (
+                        board.you.map((it) => (
+                          <YouCard
+                            key={it.id}
+                            item={it}
+                            busy={busy}
+                            windowOpen={board.window_open}
+                            onSend={(text) =>
+                              call(`/release/you/${encodeURIComponent(it.id)}/send`, "POST", {
+                                text,
+                              })
+                            }
+                          />
+                        ))
+                      ) : col.id === "others" ? (
+                        board.others.map((o) => (
+                          <div
+                            key={`${o.thread}-${o.github ?? o.repo}-${o.number}`}
+                            className="flex flex-col gap-1 rounded-lg border border-border/60 bg-card px-3 py-2 text-sm shadow-xs/5"
+                          >
+                            <PrLink pr={o} />
+                            <p className="text-xs text-muted-foreground">{o.verdict}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {o.asked_by_name ? `${o.asked_by_name} · ` : ""}
+                              {agoMs(o.last_ask)}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        board.stages[col.id].map((c) => (
+                          <StageCard
+                            key={`${c.stage}-${c.thread}`}
+                            card={c}
+                            stuck={stuckByThread.get(c.thread) ?? null}
+                            busy={busy}
+                            onWatch={watch}
+                            onRetry={(key) =>
+                              void call(
+                                `/release/replies/${encodeURIComponent(key)}/approve`,
+                                "POST",
+                              )
+                            }
+                          />
+                        ))
+                      )}
+                    </div>
+                  </section>
                 ))}
-              </ul>
-            </Card>
-          ) : null}
-          {board.runs.length > 0 ? (
-            <details className="text-xs text-muted-foreground">
-              <summary className="cursor-pointer select-none">Recent checks</summary>
-              <ul className="mt-2 flex flex-col gap-1">
-                {board.runs.map((r) => (
-                  <li key={r.at}>
-                    {agoMs(r.at)}: {r.threads} threads, {r.read} read, {r.qualified} understood
-                    {r.failed ? `, ${r.failed} to retry` : ""}
-                    {r.seconds !== undefined ? ` in ${r.seconds}s` : ""}
-                    {r.error ? `. ${r.error}` : ""}
-                  </li>
-                ))}
-              </ul>
-            </details>
-          ) : null}
-        </>
-      ) : null}
+              </div>
+            ) : null}
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -401,17 +394,35 @@ function PrLink({
   );
 }
 
-function StageCard({ card, onWatch }: { card: ReleaseCard; onWatch: (threadId: string) => void }) {
+function StageCard({
+  card,
+  stuck,
+  busy,
+  onWatch,
+  onRetry,
+}: {
+  card: ReleaseCard;
+  stuck: ReleaseStuck | null;
+  busy: boolean;
+  onWatch: (threadId: string) => void;
+  onRetry: (key: string) => void;
+}) {
   const thread = card.review?.t3_thread ?? card.t3_thread ?? null;
   const results = card.review?.results ?? [];
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg border border-border/60 bg-card px-3 py-2.5 text-sm shadow-xs/5">
+    <div
+      className={cn(
+        "flex flex-col gap-1.5 rounded-lg border bg-card px-3 py-2.5 text-sm shadow-xs/5",
+        stuck ? "border-warning/50" : "border-border/60",
+      )}
+    >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         {card.prs.map((p) => (
           <PrLink key={`${p.github}#${p.number}`} pr={p} />
         ))}
+        {card.stage === "reviewing" ? <Spinner className="size-3 text-muted-foreground" /> : null}
       </div>
-      {card.prs[0]?.title ? (
+      {card.prs.some((p) => p.title) ? (
         <p className="line-clamp-2 text-xs text-muted-foreground">
           {card.prs
             .map((p) => p.title)
@@ -452,13 +463,20 @@ function StageCard({ card, onWatch }: { card: ReleaseCard; onWatch: (threadId: s
         </div>
       ) : null}
       {card.review?.error ? <p className="text-xs text-destructive">{card.review.error}</p> : null}
-      {card.reply && card.reply.status !== "posted" && card.reply.error ? (
+      {stuck ? (
+        <p className="text-xs text-warning">The reply did not post: {stuck.reply_error}</p>
+      ) : card.reply && card.reply.status !== "posted" && card.reply.error ? (
         <p className="text-xs text-warning">Reply not posted yet: {card.reply.error}</p>
       ) : null}
       {card.stage === "replied" && card.reply ? (
         <p className="text-xs text-muted-foreground">Replied {agoMs(card.reply.at)}</p>
       ) : null}
       <div className="flex flex-wrap gap-1.5 pt-0.5">
+        {stuck ? (
+          <Button size="xs" disabled={busy} onClick={() => onRetry(stuck.key)}>
+            <RotateCwIcon className="size-3" /> Try again
+          </Button>
+        ) : null}
         {thread ? (
           <Button size="xs" variant="outline" onClick={() => onWatch(thread)}>
             Watch
@@ -476,7 +494,7 @@ function StageCard({ card, onWatch }: { card: ReleaseCard; onWatch: (threadId: s
   );
 }
 
-function YouRow({
+function YouCard({
   item,
   busy,
   windowOpen,
@@ -490,7 +508,7 @@ function YouRow({
   const [text, setText] = useState(item.queued ?? item.suggestion ?? "");
   const who = item.by_name ?? item.asked_by_name ?? "";
   return (
-    <li className="flex flex-col gap-2 py-2.5 text-sm">
+    <div className="flex flex-col gap-1.5 rounded-lg border border-border/60 bg-card px-3 py-2.5 text-sm shadow-xs/5">
       <div className="flex flex-wrap items-center gap-2">
         {item.kind === "pr" ? (
           <PrLink
@@ -504,52 +522,52 @@ function YouRow({
         ) : (
           <span className="font-medium">Question</span>
         )}
-        <span className="text-xs text-muted-foreground">
-          {who ? `from ${who}` : ""}
-          {item.kind === "pr" && item.verdict ? ` · ${item.verdict}` : ""}
-          {item.kind === "mention" && item.summary ? ` · ${item.summary}` : ""}
-        </span>
-        <span className="flex-1" />
-        <Button
-          size="xs"
-          variant="ghost"
-          render={<a href={item.link} target="_blank" rel="noreferrer" />}
-        >
-          ClickUp <ExternalLinkIcon className="size-3" />
-        </Button>
       </div>
+      <p className="text-xs text-muted-foreground">
+        {who ? `${who} · ` : ""}
+        {agoMs(item.last_ask ?? item.date)}
+      </p>
+      <p className="text-xs text-muted-foreground">
+        {item.kind === "pr" ? item.verdict : item.summary}
+      </p>
       {item.answerable ? (
-        <div className="flex flex-col gap-2">
+        <>
           <Textarea
             unstyled
             value={text}
             placeholder={
-              item.kind === "mention"
-                ? "Your answer. The Inbox also has this question, with a drafted reply."
-                : "Your answer"
+              item.kind === "mention" ? "Your answer (the Inbox has a draft)" : "Your answer"
             }
-            className="block w-full rounded-lg border border-border/60 bg-background/60 [&_textarea]:min-h-14 [&_textarea]:resize-y [&_textarea]:bg-transparent [&_textarea]:px-3 [&_textarea]:py-2 [&_textarea]:text-sm"
+            className="block w-full rounded-md border border-border/60 bg-background/60 [&_textarea]:min-h-20 [&_textarea]:resize-y [&_textarea]:bg-transparent [&_textarea]:px-2 [&_textarea]:py-1.5 [&_textarea]:text-xs"
             onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setText(e.target.value)}
           />
-          <div className="flex items-center justify-end gap-2">
-            {item.queued ? (
-              <span className="text-xs text-muted-foreground">Queued for 09:30</span>
-            ) : null}
-            <span className="text-xs text-muted-foreground">
-              Sent with a mention of {who || "the asker"}
-            </span>
+          <div className="flex flex-wrap items-center gap-1.5">
             <Button size="xs" disabled={busy || !text.trim()} onClick={() => void onSend(text)}>
               <SendIcon className="size-3" />
               {windowOpen ? "Send" : "Send at 09:30"}
             </Button>
+            <Button
+              size="xs"
+              variant="ghost"
+              render={<a href={item.link} target="_blank" rel="noreferrer" />}
+            >
+              ClickUp <ExternalLinkIcon className="size-3" />
+            </Button>
           </div>
-        </div>
+          {item.queued ? <p className="text-xs text-muted-foreground">Queued for 09:30</p> : null}
+        </>
       ) : (
-        <p className="text-xs text-muted-foreground">
-          Your own pull request: Chief reviews it only when you ask.
-        </p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button
+            size="xs"
+            variant="ghost"
+            render={<a href={item.link} target="_blank" rel="noreferrer" />}
+          >
+            ClickUp <ExternalLinkIcon className="size-3" />
+          </Button>
+        </div>
       )}
-    </li>
+    </div>
   );
 }
 
