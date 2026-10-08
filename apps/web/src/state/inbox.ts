@@ -1,4 +1,5 @@
 import type { EnvironmentId } from "@t3tools/contracts";
+import type { ReleaseSummary } from "./reviews";
 import { useSyncExternalStore } from "react";
 
 /**
@@ -134,6 +135,8 @@ export interface MyTaskDetail {
 export interface InboxHealth {
   readonly mytasks?: MyTasksSummary;
   readonly specs?: { readonly needs_you: number };
+  /** PR reviews from the Release Request channel (state/reviews.ts). */
+  readonly release?: ReleaseSummary;
   readonly configured: boolean;
   readonly last_error: string | null;
   readonly last_poll_at: string | null;

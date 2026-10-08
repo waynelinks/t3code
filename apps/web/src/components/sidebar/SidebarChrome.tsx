@@ -1,4 +1,5 @@
 import {
+  GitPullRequestArrowIcon,
   ArrowLeftIcon,
   ChartNoAxesColumnIcon,
   ChevronsUpDownIcon,
@@ -275,6 +276,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   const isOnInbox = useLocation({ select: (location) => location.pathname === "/inbox" });
   const isOnTasks = useLocation({ select: (location) => location.pathname === "/tasks" });
   const isOnSpecs = useLocation({ select: (location) => location.pathname === "/specs" });
+  const isOnReviews = useLocation({ select: (location) => location.pathname === "/reviews" });
   const { environments } = useEnvironments();
   const inboxFeeds = useInboxFeeds();
   const organisationScope = useOrganisationScope();
@@ -298,6 +300,18 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
         ? sum + (feed.health?.specs?.needs_you ?? 0)
         : sum,
     0,
+  );
+  const reviewsNeedingYou = inboxFeeds.reduce(
+    (sum, feed) =>
+      inOrganisationScope(organisationScope, feed.environmentId)
+        ? sum + (feed.health?.release?.needs_you ?? 0)
+        : sum,
+    0,
+  );
+  const reviewsSetUp = inboxFeeds.some(
+    (feed) =>
+      inOrganisationScope(organisationScope, feed.environmentId) &&
+      feed.health?.release !== undefined,
   );
   // The page reads every connected server, so one of them offering pull requests is enough for
   // the link to lead somewhere.
@@ -327,6 +341,10 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   const handleTasksClick = useCallback(() => {
     closeMobileSidebar();
     void navigate({ to: "/tasks" });
+  }, [closeMobileSidebar, navigate]);
+  const handleReviewsClick = useCallback(() => {
+    closeMobileSidebar();
+    void navigate({ to: "/reviews" });
   }, [closeMobileSidebar, navigate]);
   const handleSpecsClick = useCallback(() => {
     closeMobileSidebar();
@@ -382,6 +400,15 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             active={isOnSpecs}
             onClick={handleSpecsClick}
           />
+          {reviewsSetUp ? (
+            <SidebarUtilityItem
+              icon={<GitPullRequestArrowIcon />}
+              label="PR reviews"
+              badge={reviewsNeedingYou}
+              active={isOnReviews}
+              onClick={handleReviewsClick}
+            />
+          ) : null}
           {pullRequestsSupported ? (
             <SidebarUtilityItem
               icon={<PullRequestGlyph.pullRequest />}

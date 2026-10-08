@@ -32,6 +32,7 @@ import { Route as SettingsAppearanceRouteImport } from './routes/settings.appear
 import { Route as ProjectsProjectKeyRouteImport } from './routes/projects.$projectKey'
 import { Route as ChatTasksRouteImport } from './routes/_chat.tasks'
 import { Route as ChatSpecsRouteImport } from './routes/_chat.specs'
+import { Route as ChatReviewsRouteImport } from './routes/_chat.reviews'
 import { Route as ChatPullRequestsRouteImport } from './routes/_chat.pull-requests'
 import { Route as ChatInboxRouteImport } from './routes/_chat.inbox'
 import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draftId'
@@ -152,6 +153,11 @@ const ChatSpecsRoute = ChatSpecsRouteImport.update({
   path: '/specs',
   getParentRoute: () => ChatRoute,
 } as any)
+const ChatReviewsRoute = ChatReviewsRouteImport.update({
+  id: '/reviews',
+  path: '/reviews',
+  getParentRoute: () => ChatRoute,
+} as any)
 const ChatPullRequestsRoute = ChatPullRequestsRouteImport.update({
   id: '/pull-requests',
   path: '/pull-requests',
@@ -183,6 +189,7 @@ export interface FileRoutesByFullPath {
   '/welcome': typeof WelcomeRoute
   '/inbox': typeof ChatInboxRoute
   '/pull-requests': typeof ChatPullRequestsRoute
+  '/reviews': typeof ChatReviewsRoute
   '/specs': typeof ChatSpecsRoute
   '/tasks': typeof ChatTasksRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
@@ -210,6 +217,7 @@ export interface FileRoutesByTo {
   '/welcome': typeof WelcomeRoute
   '/inbox': typeof ChatInboxRoute
   '/pull-requests': typeof ChatPullRequestsRoute
+  '/reviews': typeof ChatReviewsRoute
   '/specs': typeof ChatSpecsRoute
   '/tasks': typeof ChatTasksRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
@@ -240,6 +248,7 @@ export interface FileRoutesById {
   '/welcome': typeof WelcomeRoute
   '/_chat/inbox': typeof ChatInboxRoute
   '/_chat/pull-requests': typeof ChatPullRequestsRoute
+  '/_chat/reviews': typeof ChatReviewsRoute
   '/_chat/specs': typeof ChatSpecsRoute
   '/_chat/tasks': typeof ChatTasksRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
@@ -271,6 +280,7 @@ export interface FileRouteTypes {
     | '/welcome'
     | '/inbox'
     | '/pull-requests'
+    | '/reviews'
     | '/specs'
     | '/tasks'
     | '/projects/$projectKey'
@@ -298,6 +308,7 @@ export interface FileRouteTypes {
     | '/welcome'
     | '/inbox'
     | '/pull-requests'
+    | '/reviews'
     | '/specs'
     | '/tasks'
     | '/projects/$projectKey'
@@ -327,6 +338,7 @@ export interface FileRouteTypes {
     | '/welcome'
     | '/_chat/inbox'
     | '/_chat/pull-requests'
+    | '/_chat/reviews'
     | '/_chat/specs'
     | '/_chat/tasks'
     | '/projects/$projectKey'
@@ -521,6 +533,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatSpecsRouteImport
       parentRoute: typeof ChatRoute
     }
+    '/_chat/reviews': {
+      id: '/_chat/reviews'
+      path: '/reviews'
+      fullPath: '/reviews'
+      preLoaderRoute: typeof ChatReviewsRouteImport
+      parentRoute: typeof ChatRoute
+    }
     '/_chat/pull-requests': {
       id: '/_chat/pull-requests'
       path: '/pull-requests'
@@ -555,6 +574,7 @@ declare module '@tanstack/react-router' {
 interface ChatRouteChildren {
   ChatInboxRoute: typeof ChatInboxRoute
   ChatPullRequestsRoute: typeof ChatPullRequestsRoute
+  ChatReviewsRoute: typeof ChatReviewsRoute
   ChatSpecsRoute: typeof ChatSpecsRoute
   ChatTasksRoute: typeof ChatTasksRoute
   ChatIndexRoute: typeof ChatIndexRoute
@@ -565,6 +585,7 @@ interface ChatRouteChildren {
 const ChatRouteChildren: ChatRouteChildren = {
   ChatInboxRoute: ChatInboxRoute,
   ChatPullRequestsRoute: ChatPullRequestsRoute,
+  ChatReviewsRoute: ChatReviewsRoute,
   ChatSpecsRoute: ChatSpecsRoute,
   ChatTasksRoute: ChatTasksRoute,
   ChatIndexRoute: ChatIndexRoute,
