@@ -676,6 +676,23 @@ function Detail({
         {row.body ? (
           <p className="text-sm leading-relaxed whitespace-pre-wrap">{row.body}</p>
         ) : null}
+        {row.url ? (
+          <a
+            href={row.url}
+            target="_blank"
+            rel="noreferrer"
+            className="-mt-2 inline-flex w-fit items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
+          >
+            <ExternalLinkIcon className="size-3.5" />
+            {row.reply_to?.kind === "thread" ||
+            row.reply_to?.kind === "comment-thread" ||
+            row.reply_to?.kind === "release"
+              ? "Open the thread in ClickUp"
+              : row.reply_to?.kind === "channel"
+                ? "Open the conversation in ClickUp"
+                : "Open the task in ClickUp"}
+          </a>
+        ) : null}
         {row.reply ? (
           <div className="rounded-xl border border-border/60 bg-muted/20 shadow-xs/5 p-4 text-sm">
             <p className="mb-1 text-xs text-muted-foreground">
