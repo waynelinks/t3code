@@ -97,6 +97,13 @@ function fullDate(iso: string): string {
     minute: "2-digit",
   });
 }
+/** A conversation's time: its latest message from someone else (Gmail-style), else when the row came. */
+const lastAt = (row: InboxItem) => row.activity_at ?? row.created_at;
+const messageCount = (row: InboxItem) => {
+  const n = Number((row.context as { count?: unknown }).count ?? 0);
+  return Number.isFinite(n) ? n : 0;
+};
+
 function signature(row: InboxItem): string {
   let h = 0;
   for (const ch of `${row.body}|${row.task?.status ?? ""}`) h = (h * 31 + ch.charCodeAt(0)) | 0;
@@ -158,7 +165,7 @@ export function InboxPage() {
             key: `${feed.environmentId}:${item.id}`,
           })),
         )
-        .sort((a, b) => b.created_at.localeCompare(a.created_at)),
+        .sort((a, b) => lastAt(b).localeCompare(lastAt(a))),
     [inScope, labelFor],
   );
   const [tab, setTab] = useState<Tab>("open");
@@ -402,7 +409,7 @@ export function InboxPage() {
               </li>
             ) : (
               visible.map((row, index) => {
-                const groupOf = (r: Row) => (r.priority ? "Priority" : dayLabel(r.created_at));
+                const groupOf = (r: Row) => (r.priority ? "Priority" : dayLabel(lastAt(r)));
                 const label = groupOf(row);
                 const first = index === 0 || groupOf(visible[index - 1]!) !== label;
                 return (
@@ -520,8 +527,11 @@ function ListItem({
                 className="ml-1 inline size-3 -translate-y-px fill-warning text-warning"
               />
             ) : null}
+            {messageCount(row) > 1 ? (
+              <span className="ml-1 text-muted-foreground">{messageCount(row)}</span>
+            ) : null}
             {" · "}
-            {timeAgo(row.created_at)}
+            {timeAgo(lastAt(row))}
             {showOrganisation ? ` · ${row.organisation}` : ""}
           </span>
           <span className="flex-1" />
@@ -590,7 +600,8 @@ function Detail({
     : [];
   const subtitle = [
     `${KIND_LABEL[row.kind] ?? row.kind}${where ? ` in ${where}` : ""}`,
-    fullDate(row.created_at),
+    fullDate(lastAt(row)),
+    messageCount(row) > 1 ? `${messageCount(row)} messages` : null,
     showOrganisation ? row.organisation : null,
   ]
     .filter(Boolean)
@@ -664,7 +675,7 @@ function Detail({
         <h2 className="text-lg font-semibold tracking-tight">{row.title}</h2>
         {thread.length > 0 ? (
           <div className="flex flex-col gap-2 border-l-2 border-border/50 pl-3">
-            {thread.slice(-6).map((x, i) => (
+            {thread.slice(-40).map((x, i) => (
               <div key={`${x.at ?? i}-${i}`} className="text-sm text-muted-foreground">
                 <span className="font-medium text-foreground/70">{x.who ?? "someone"}</span>
                 {x.at ? <span className="text-xs"> · {timeAgo(x.at)}</span> : null}
@@ -804,7 +815,11 @@ function Composer({ row, busy, onAct }: { row: Row; busy: boolean; onAct: Act })
           )}
         >
           <PencilLineIcon className="size-3.5" />
-          {untouchedDraft ? "Draft · edit it, or send as is" : "Edited draft · not sent yet"}
+          {untouchedDraft
+            ? "Draft · edit it, or send as is"
+            : row.draft.stale
+              ? "Edited draft · a newer message came in after it"
+              : "Edited draft · not sent yet"}
         </div>
       ) : null}
       <Textarea
@@ -877,7 +892,7 @@ function goalFrom(row: Row): string {
   const thread = Array.isArray(ctx.thread)
     ? (ctx.thread as { who?: string; text?: string }[])
         .filter((x) => x.text && !row.body.includes(x.text))
-        .slice(-4)
+        .slice(-20)
     : [];
   if (thread.length > 0)
     lines.push(

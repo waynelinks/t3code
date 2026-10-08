@@ -19,6 +19,8 @@ export interface InboxDraft {
   readonly error?: string;
   readonly generated_at?: string;
   readonly edited?: boolean;
+  /** An edited draft written before the conversation's latest message. */
+  readonly stale?: boolean;
 }
 export interface InboxItem {
   readonly id: string;
@@ -35,6 +37,8 @@ export interface InboxItem {
   readonly body: string;
   readonly url: string | null;
   readonly next_action: string;
+  /** The conversation's latest message from someone else; rows sort and show their time by it. */
+  readonly activity_at?: string;
   readonly context: Record<string, unknown>;
   readonly draft: InboxDraft;
   readonly reply: { readonly sent_at: string; readonly text: string } | null;
