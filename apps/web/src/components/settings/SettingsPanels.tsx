@@ -2103,7 +2103,7 @@ function LegacyFeaturesSection() {
           <SettingsGroup>
             <SettingsRow
               {...searchableSetting("legacy-plan-mode")}
-              description="Restore Build/Plan, /plan, /default, and Shift+Tab. Off uses build mode."
+              description="The Plan or Develop switch in the composer, /plan, /default and Shift+Tab. Off always develops."
               control={
                 <Switch
                   checked={settings.planModeEnabled}

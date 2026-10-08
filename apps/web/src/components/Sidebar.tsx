@@ -1550,10 +1550,19 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         isRegeneratingTitle && "opacity-55",
       )}
     >
+      {thread.interactionMode === "plan" ? (
+        <span className="mr-1.5 inline-block rounded-sm bg-info/10 px-1 align-[1px] text-[10px] leading-4 font-medium text-info-foreground">
+          Plan
+        </span>
+      ) : null}
       {thread.title}
     </span>
   );
-  const accessibleTitle = isRenaming ? null : <span className="sr-only">{thread.title}</span>;
+  const accessibleTitle = isRenaming ? null : (
+    <span className="sr-only">
+      {thread.interactionMode === "plan" ? `Planning: ${thread.title}` : thread.title}
+    </span>
+  );
 
   // Stacks show their layer count; multiple unrelated links show their total count.
   // Either opens the thread's pull requests tab; a single PR link opens that PR and still
