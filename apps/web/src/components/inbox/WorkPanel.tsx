@@ -238,8 +238,9 @@ export function WorkPanel({
               </Button>
             ) : null}
             <span className="text-xs text-muted-foreground">
-              A thread opens in Plan mode with the task in it. A build writes a spec for you to
-              approve first.
+              {allowBuild
+                ? "A thread opens in Plan mode with the task in it. A build writes a spec for you to approve first."
+                : "A thread opens in Plan mode with the message in it, to plan or answer it with the code."}
             </span>
           </div>
         )}
