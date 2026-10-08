@@ -39,7 +39,7 @@ export interface InboxItem {
   readonly draft: InboxDraft;
   readonly reply: { readonly sent_at: string; readonly text: string } | null;
   readonly reply_to?: {
-    readonly kind: "task-comment" | "comment-thread" | "channel" | "thread";
+    readonly kind: "task-comment" | "comment-thread" | "channel" | "thread" | "release";
   } | null;
   readonly task?: InboxTask | null;
 }

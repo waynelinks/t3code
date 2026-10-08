@@ -715,11 +715,13 @@ function Composer({ row, busy, onAct }: { row: Row; busy: boolean; onAct: Act })
   const hasDraft = row.draft.state === "ready" || row.draft.state === "failed";
   const canSend = !busy && !drafting && text.trim().length > 0;
   const target =
-    row.reply_to?.kind === "channel"
-      ? "the conversation"
-      : row.reply_to?.kind === "thread" || row.reply_to?.kind === "comment-thread"
-        ? "the thread"
-        : "the task comments";
+    row.reply_to?.kind === "release"
+      ? "the request's thread, typed with a mention"
+      : row.reply_to?.kind === "channel"
+        ? "the conversation"
+        : row.reply_to?.kind === "thread" || row.reply_to?.kind === "comment-thread"
+          ? "the thread"
+          : "the task comments";
   return (
     <div className="flex flex-col rounded-xl border border-border/60 bg-card/40 shadow-xs/5">
       <div className="flex flex-wrap items-center gap-2 border-b border-border/50 px-4 py-2.5 text-sm">

@@ -5,7 +5,6 @@ import {
   CheckIcon,
   CircleDashedIcon,
   CircleIcon,
-  ExternalLinkIcon,
   EyeIcon,
   GitPullRequestIcon,
   MessageSquareIcon,
@@ -13,10 +12,9 @@ import {
   LogInIcon,
   PlayIcon,
   RotateCwIcon,
-  SendIcon,
   SettingsIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { cn } from "../../lib/utils";
 import { useEnvironments } from "../../state/environments";
@@ -26,19 +24,17 @@ import {
   useOrganisationLabel,
   useOrganisationScope,
 } from "../../state/organisation";
-import type { ReleaseBoard, ReleaseCard, ReleaseStuck, ReleaseYou } from "../../state/reviews";
+import type { ReleaseBoard, ReleaseCard, ReleaseStuck } from "../../state/reviews";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Spinner } from "../ui/spinner";
-import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { ago } from "./shared";
 
 /** The board's columns, left to right: what waits on you, then a request's way through. */
 const COLUMNS = [
-  { id: "you", title: "Needs you", hint: "Only you can answer these" },
   { id: "requested", title: "Requested", hint: "Asked in the channel, needs your review" },
   { id: "reviewing", title: "Reviewing", hint: "A review thread is working on it" },
   { id: "reviewed", title: "Reviewed", hint: "The verdict is on GitHub, or a draft" },
@@ -129,8 +125,7 @@ export function ReviewsPage() {
   const stuckByThread = new Map<string, ReleaseStuck>(
     (board?.stuck ?? []).map((s) => [s.thread, s]),
   );
-  const count = (id: (typeof COLUMNS)[number]["id"]) =>
-    !board ? 0 : id === "you" ? board.you.length : board.stages[id].length;
+  const count = (id: (typeof COLUMNS)[number]["id"]) => (!board ? 0 : board.stages[id].length);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
@@ -267,8 +262,7 @@ export function ReviewsPage() {
                     key={col.id}
                     className={cn(
                       "flex min-h-0 basis-0 flex-col rounded-xl border border-border/50 bg-muted/20",
-                      // Needs you holds answer boxes: it gets more room than the others
-                      col.id === "you" ? "min-w-[15rem] flex-[1.6]" : "min-w-[10.5rem] flex-1",
+                      "min-w-[13rem] flex-1",
                     )}
                   >
                     <header className="flex shrink-0 items-center gap-2 px-3 pt-2.5 pb-2 text-xs font-medium text-muted-foreground">
@@ -276,34 +270,13 @@ export function ReviewsPage() {
                       {col.id === "reviewing" && count("reviewing") > 0 ? (
                         <Spinner className="size-3 text-info" />
                       ) : null}
-                      <span
-                        className={cn(
-                          "rounded-full px-1.5 tabular-nums",
-                          col.id === "you" && count("you") > 0
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted",
-                        )}
-                      >
+                      <span className={cn("rounded-full px-1.5 tabular-nums", "bg-muted")}>
                         {count(col.id)}
                       </span>
                     </header>
                     <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
                       {count(col.id) === 0 ? (
                         <p className="px-1.5 text-xs text-muted-foreground/70">{col.hint}</p>
-                      ) : col.id === "you" ? (
-                        board.you.map((it) => (
-                          <YouCard
-                            key={it.id}
-                            item={it}
-                            busy={busy}
-                            windowOpen={board.window_open}
-                            onSend={(text) =>
-                              call(`/release/you/${encodeURIComponent(it.id)}/send`, "POST", {
-                                text,
-                              })
-                            }
-                          />
-                        ))
                       ) : (
                         board.stages[col.id].map((c) => (
                           <StageCard
@@ -330,27 +303,6 @@ export function ReviewsPage() {
         )}
       </div>
     </div>
-  );
-}
-
-function PrLink({
-  pr,
-}: {
-  pr: { github?: string; repo?: string; number: number; url?: string; title?: string };
-}) {
-  const name = `${(pr.github ?? pr.repo ?? "").split("/").pop()}#${pr.number}`;
-  return pr.url ? (
-    <a
-      href={pr.url}
-      target="_blank"
-      rel="noreferrer"
-      className="font-medium hover:underline"
-      title={pr.title}
-    >
-      {name}
-    </a>
-  ) : (
-    <span className="font-medium">{name}</span>
   );
 }
 
@@ -602,83 +554,6 @@ function StageCard({
           </Button>
         ) : null}
       </div>
-    </div>
-  );
-}
-
-function YouCard({
-  item,
-  busy,
-  windowOpen,
-  onSend,
-}: {
-  item: ReleaseYou;
-  busy: boolean;
-  windowOpen: boolean;
-  onSend: (text: string) => Promise<boolean>;
-}) {
-  const [text, setText] = useState(item.queued ?? item.suggestion ?? "");
-  const who = item.by_name ?? item.asked_by_name ?? "";
-  return (
-    <div className="flex flex-col gap-1.5 rounded-lg border border-border/60 bg-card px-3 py-2.5 text-sm shadow-xs/5">
-      <div className="flex flex-wrap items-center gap-2">
-        {item.kind === "pr" ? (
-          <PrLink
-            pr={{
-              repo: item.repo ?? "",
-              number: item.number ?? 0,
-              ...(item.url ? { url: item.url } : {}),
-              ...(item.title ? { title: item.title } : {}),
-            }}
-          />
-        ) : (
-          <span className="font-medium">Question</span>
-        )}
-      </div>
-      <p className="text-xs text-muted-foreground">
-        {who ? `${who} · ` : ""}
-        {agoMs(item.last_ask ?? item.date)}
-      </p>
-      <p className="text-xs text-muted-foreground">
-        {item.kind === "pr" ? item.verdict : item.summary}
-      </p>
-      {item.answerable ? (
-        <>
-          <Textarea
-            unstyled
-            value={text}
-            placeholder={
-              item.kind === "mention" ? "Your answer (the Inbox has a draft)" : "Your answer"
-            }
-            className="block w-full rounded-md border border-border/60 bg-background/60 [&_textarea]:min-h-20 [&_textarea]:resize-y [&_textarea]:bg-transparent [&_textarea]:px-2 [&_textarea]:py-1.5 [&_textarea]:text-xs"
-            onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setText(e.target.value)}
-          />
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Button size="xs" disabled={busy || !text.trim()} onClick={() => void onSend(text)}>
-              <SendIcon className="size-3" />
-              {windowOpen ? "Send" : "Send at 09:30"}
-            </Button>
-            <Button
-              size="xs"
-              variant="ghost"
-              render={<a href={item.link} target="_blank" rel="noreferrer" />}
-            >
-              ClickUp <ExternalLinkIcon className="size-3" />
-            </Button>
-          </div>
-          {item.queued ? <p className="text-xs text-muted-foreground">Queued for 09:30</p> : null}
-        </>
-      ) : (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Button
-            size="xs"
-            variant="ghost"
-            render={<a href={item.link} target="_blank" rel="noreferrer" />}
-          >
-            ClickUp <ExternalLinkIcon className="size-3" />
-          </Button>
-        </div>
-      )}
     </div>
   );
 }
