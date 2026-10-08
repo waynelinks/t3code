@@ -7,6 +7,7 @@ import {
   ExternalLinkIcon,
   FileTextIcon,
   GavelIcon,
+  GitPullRequestIcon,
   Loader2Icon,
   PencilIcon,
   PlusIcon,
@@ -945,6 +946,11 @@ function SpecDetail({
                   onAction={(action) =>
                     call(`/steps/${encodeURIComponent(st.id)}/${action}`, "POST", {})
                   }
+                  onEdit={(patch) => call(`/steps/${encodeURIComponent(st.id)}`, "PUT", patch)}
+                  onLink={(links) =>
+                    call(`/steps/${encodeURIComponent(st.id)}/links`, "POST", links)
+                  }
+                  allRequirements={spec.requirements}
                   onWatch={(threadId) =>
                     void navigate({
                       to: "/$environmentId/$threadId",
@@ -1222,6 +1228,133 @@ function RequirementsCard({
   );
 }
 
+/** The owner edits a step: its summary and the requirements it delivers (a requirement with no step blocks the
+ *  design's approval, so this is where one is taken on). */
+function StepEditor({
+  step,
+  requirements,
+  busy,
+  onCancel,
+  onSave,
+}: {
+  step: SpecStep;
+  requirements: ReadonlyArray<SpecRequirement>;
+  busy: boolean;
+  onCancel: () => void;
+  onSave: (patch: { summary: string; requirements: string[]; title: string }) => Promise<unknown>;
+}) {
+  const [title, setTitle] = useState(step.title);
+  const [summary, setSummary] = useState(step.summary);
+  const [picked, setPicked] = useState<string[]>([...step.requirements]);
+  return (
+    <div className="flex flex-col gap-2">
+      <Input
+        value={title}
+        aria-label="Step title"
+        onChange={(e: ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
+      />
+      <Textarea
+        unstyled
+        value={summary}
+        aria-label="Step summary"
+        className="block w-full rounded-lg border border-border/60 bg-background/60 [&_textarea]:min-h-20 [&_textarea]:resize-y [&_textarea]:bg-transparent [&_textarea]:px-3 [&_textarea]:py-2 [&_textarea]:text-sm"
+        onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setSummary(e.target.value)}
+      />
+      <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        Requirements this step delivers
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {requirements.map((r) => {
+          const on = picked.includes(r.id);
+          return (
+            <button
+              key={r.id}
+              type="button"
+              title={r.statement}
+              className={cn(
+                "rounded-full border px-2 py-0.5 font-mono text-xs",
+                on
+                  ? "border-primary/40 bg-primary/10 text-foreground"
+                  : "border-border/60 text-muted-foreground",
+              )}
+              onClick={() => setPicked((p) => (on ? p.filter((x) => x !== r.id) : [...p, r.id]))}
+            >
+              {r.id}
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button size="xs" variant="ghost" disabled={busy} onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button
+          size="xs"
+          disabled={busy || !title.trim()}
+          onClick={() => void onSave({ title, summary, requirements: picked })}
+        >
+          Save the step
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Pull requests the owner opened by hand (main and its staging pair): the step ticks when both are merged. */
+function LinkPrs({
+  step,
+  busy,
+  onLink,
+}: {
+  step: SpecStep;
+  busy: boolean;
+  onLink: (links: { main: string; staging: string }) => Promise<boolean>;
+}) {
+  const [show, setShow] = useState(false);
+  const [main, setMain] = useState(step.pr_links?.main ?? "");
+  const [staging, setStaging] = useState(step.pr_links?.staging ?? "");
+  if (!show) {
+    return (
+      <Button size="xs" variant="ghost" className="w-fit" onClick={() => setShow(true)}>
+        <GitPullRequestIcon className="size-3" />
+        {step.pr_links ? "Change the linked PRs" : "Link PRs opened by hand"}
+      </Button>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Input
+        value={main}
+        placeholder="The main pull request link"
+        aria-label="Main pull request"
+        onChange={(e: ChangeEvent<HTMLInputElement>) => setMain(e.target.value)}
+      />
+      <Input
+        value={staging}
+        placeholder="Its staging pair link"
+        aria-label="Staging pull request"
+        onChange={(e: ChangeEvent<HTMLInputElement>) => setStaging(e.target.value)}
+      />
+      <div className="flex justify-end gap-2">
+        <Button size="xs" variant="ghost" disabled={busy} onClick={() => setShow(false)}>
+          Cancel
+        </Button>
+        <Button
+          size="xs"
+          disabled={busy || !main.trim() || !staging.trim()}
+          onClick={() =>
+            void onLink({ main: main.trim(), staging: staging.trim() }).then(
+              (ok) => ok && setShow(false),
+            )
+          }
+        >
+          Link both
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function StepRow({
   step,
   stepById,
@@ -1230,16 +1363,27 @@ function StepRow({
   canBuild,
   onAction,
   onWatch,
+  onEdit,
+  onLink,
+  allRequirements,
 }: {
   step: SpecStep;
   stepById: Map<string, SpecStep>;
   repoName: (path: string) => string;
   busy: boolean;
   canBuild: boolean;
-  onAction: (action: "build" | "approve" | "discard") => Promise<boolean>;
+  onAction: (action: "build" | "approve" | "discard" | "pr-anyway") => Promise<boolean>;
   onWatch: (threadId: string) => void;
+  onEdit: (patch: {
+    summary?: string;
+    requirements?: ReadonlyArray<string>;
+    title?: string;
+  }) => Promise<boolean>;
+  onLink: (links: { main: string; staging: string }) => Promise<boolean>;
+  allRequirements: ReadonlyArray<SpecRequirement>;
 }) {
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const state = step.state ?? "todo";
   const waiting = step.depends_on.filter(
     (d) => !["merged", "pr_open", "checks_passed"].includes(stepById.get(d)?.state ?? "todo"),
@@ -1327,36 +1471,100 @@ function StepRow({
               </>
             ) : null}
             {state === "needs_you" ? (
-              <Button
-                size="xs"
-                variant="ghost"
-                disabled={busy}
-                onClick={() => void onAction("discard")}
-              >
-                Discard
-              </Button>
+              <>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => void onAction("discard")}
+                >
+                  Discard
+                </Button>
+                {ev && !ev.pr_url ? (
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    disabled={busy}
+                    title="Both pull requests, main and its staging pair, as drafts with the reasons in their bodies. Nothing is merged."
+                    onClick={() => void onAction("pr-anyway")}
+                  >
+                    Open both PRs anyway
+                  </Button>
+                ) : null}
+              </>
             ) : null}
             {ev?.thread_id ? (
               <Button size="xs" variant="outline" onClick={() => onWatch(ev.thread_id!)}>
                 Watch
               </Button>
             ) : null}
-            {ev?.pr_url ? (
+            {(ev?.pr_url ?? step.pr_links?.main) ? (
               <Button
                 size="xs"
                 variant="outline"
-                render={<a href={ev.pr_url} target="_blank" rel="noreferrer" />}
+                render={
+                  <a href={ev?.pr_url ?? step.pr_links!.main} target="_blank" rel="noreferrer" />
+                }
               >
-                Pull request
+                main PR
                 <ExternalLinkIcon className="size-3" />
               </Button>
+            ) : null}
+            {(ev?.staging_pr_url ?? step.pr_links?.staging) ? (
+              <Button
+                size="xs"
+                variant="outline"
+                render={
+                  <a
+                    href={ev?.staging_pr_url ?? step.pr_links!.staging}
+                    target="_blank"
+                    rel="noreferrer"
+                  />
+                }
+              >
+                staging PR
+                <ExternalLinkIcon className="size-3" />
+              </Button>
+            ) : ev?.pr_url ? (
+              <Badge variant="warning" size="sm" title={ev.pair_error ?? undefined}>
+                no staging pair
+              </Badge>
             ) : null}
           </span>
         </span>
       </div>
       {open || state === "spec_to_approve" || state === "needs_you" ? (
         <div className="ml-7 flex flex-col gap-2 rounded-lg border border-border/60 bg-background/60 p-3 text-sm">
-          {step.summary ? <p>{step.summary}</p> : null}
+          {editing ? (
+            <StepEditor
+              step={step}
+              requirements={allRequirements}
+              busy={busy}
+              onCancel={() => setEditing(false)}
+              onSave={(patch) => onEdit(patch).then((ok) => ok && setEditing(false))}
+            />
+          ) : (
+            <>
+              {step.summary ? <p>{step.summary}</p> : null}
+              {!step.chief_task_id || state === "todo" || state === "spec_failed" ? (
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  className="w-fit"
+                  onClick={() => setEditing(true)}
+                >
+                  <PencilIcon className="size-3" />
+                  Edit the step
+                </Button>
+              ) : null}
+            </>
+          )}
+          {ev?.pair_error && !ev.staging_pr_url ? (
+            <p className="text-xs text-warning">Staging pair: {ev.pair_error}</p>
+          ) : null}
+          {state === "needs_you" || state === "todo" || state === "pr_open" ? (
+            <LinkPrs step={step} busy={busy} onLink={onLink} />
+          ) : null}
           {step.acceptance.length ? (
             <div>
               <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">

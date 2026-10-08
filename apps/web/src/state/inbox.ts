@@ -68,6 +68,10 @@ export interface InboxTask {
   /** The acceptance checks, for the spec drawer. */
   readonly checks?: ReadonlyArray<{ readonly id: string; readonly what: string }>;
   readonly pr_url?: string | null;
+  /** The staging pair of the main pull request; the build is finished only when both exist. */
+  readonly staging_pr_url?: string | null;
+  readonly pair_error?: string | null;
+  readonly pr_ready?: boolean;
   readonly reasons?: string | null;
   readonly error?: string | null;
   /** The T3 thread the build runs in, when it runs as one. */

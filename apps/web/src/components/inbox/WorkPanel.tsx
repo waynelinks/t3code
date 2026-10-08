@@ -47,6 +47,8 @@ interface WorkLink {
     readonly status: string;
     readonly title: string;
     readonly pr_url: string | null;
+    readonly staging_pr_url?: string | null;
+    readonly pair_error?: string | null;
     readonly review: string | null;
     readonly spec: string | null;
     readonly checks?: ReadonlyArray<{ readonly id: string; readonly what: string }>;
@@ -552,9 +554,23 @@ function LinkRow({
             variant="outline"
             render={<a href={link.task.pr_url} target="_blank" rel="noreferrer" />}
           >
-            Pull request
+            main PR
             <ExternalLinkIcon className="size-3" />
           </Button>
+        ) : null}
+        {link.task?.staging_pr_url ? (
+          <Button
+            size="xs"
+            variant="outline"
+            render={<a href={link.task.staging_pr_url} target="_blank" rel="noreferrer" />}
+          >
+            staging PR
+            <ExternalLinkIcon className="size-3" />
+          </Button>
+        ) : link.task?.pr_url ? (
+          <Badge variant="warning" size="sm" title={link.task.pair_error ?? undefined}>
+            no staging pair
+          </Badge>
         ) : null}
       </div>
       {link.task?.spec ? (

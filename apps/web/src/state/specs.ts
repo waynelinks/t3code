@@ -11,6 +11,10 @@ export interface SpecStepEvidence {
   readonly task_status: string;
   readonly review: string | null;
   readonly pr_url: string | null;
+  /** The staging pair of the main pull request; a step is done only when both are merged. */
+  readonly staging_pr_url?: string | null;
+  readonly pair_error?: string | null;
+  readonly pr_ready?: boolean;
   readonly attempts: number | null;
   readonly spec: string | null;
   readonly acceptance_cases: number;
@@ -31,6 +35,8 @@ export interface SpecStep {
   readonly state?: string;
   readonly merged_at?: string | null;
   readonly evidence?: SpecStepEvidence | null;
+  /** Pull requests the owner opened by hand for this step. */
+  readonly pr_links?: { readonly main: string; readonly staging: string } | null;
 }
 export type SpecStatus =
   | "prd"

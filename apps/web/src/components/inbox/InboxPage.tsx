@@ -1128,26 +1128,68 @@ function TaskPanel({
     case "green":
       line = task.pr_url ? (
         <>
-          Built and reviewed.{" "}
+          Built and reviewed, both pull requests {task.pr_ready ? "ready for you to merge" : "open"}
+          :{" "}
           <a
             href={task.pr_url}
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-1 font-medium text-foreground hover:underline"
           >
-            Open the draft pull request <ExternalLinkIcon className="size-3.5" />
+            main <ExternalLinkIcon className="size-3.5" />
           </a>
+          {task.staging_pr_url ? (
+            <>
+              {" · "}
+              <a
+                href={task.staging_pr_url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 font-medium text-foreground hover:underline"
+              >
+                staging pair <ExternalLinkIcon className="size-3.5" />
+              </a>
+            </>
+          ) : (
+            <span className="text-warning">
+              {" "}
+              · no staging pair{task.pair_error ? `: ${task.pair_error}` : ""}
+            </span>
+          )}
         </>
       ) : (
-        `Built and reviewed.${task.reasons ? ` The pull request did not open: ${task.reasons}` : ""}`
+        `Built and reviewed.${task.reasons ? ` The pull requests did not open: ${task.reasons}` : ""}`
       );
       actions = watch;
       break;
     case "needs_owner":
-      line = "The build stopped and needs you.";
+      line =
+        task.pr_url && !task.staging_pr_url
+          ? `The main pull request is open but its staging pair is not: ${task.pair_error ?? "see why below"}.`
+          : "The build stopped and needs you.";
       actions = (
         <>
           {discard}
+          {!task.pr_url ? (
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={busy}
+              title="Both pull requests, main and its staging pair, as drafts with the reasons in their bodies. Nothing is merged."
+              onClick={() => void onAct(row, "pr-anyway")}
+            >
+              Open both PRs anyway
+            </Button>
+          ) : null}
+          {task.pr_url ? (
+            <Button
+              size="xs"
+              variant="outline"
+              render={<a href={task.pr_url} target="_blank" rel="noreferrer" />}
+            >
+              main PR <ExternalLinkIcon className="size-3" />
+            </Button>
+          ) : null}
           {watch}
         </>
       );
