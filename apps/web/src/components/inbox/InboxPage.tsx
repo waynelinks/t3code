@@ -69,7 +69,7 @@ const KIND_LABEL: Record<string, string> = {
   direct: "Direct message",
   "chat-mention": "Tagged you",
   channel: "Watched channel",
-  task: "Task",
+  task: "Chief build",
   note: "Note",
 };
 const TASK_LABEL: Record<string, string> = {
@@ -362,7 +362,12 @@ export function InboxPage() {
             </ToggleGroup>
           </div>
           {inScope.map((feed) => (
-            <FeedNotice key={feed.environmentId} feed={feed} label={labelFor(feed.environmentId)} />
+            <FeedNotice
+              key={feed.environmentId}
+              feed={feed}
+              label={labelFor(feed.environmentId)}
+              quiet={scope === "all"}
+            />
           ))}
           {error ? <p className="mx-3 mb-2 text-xs text-destructive">{error}</p> : null}
           <ul className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-3">
@@ -430,7 +435,17 @@ export function InboxPage() {
   );
 }
 
-function FeedNotice({ feed, label }: { feed: EnvironmentInbox; label: string }) {
+function FeedNotice({
+  feed,
+  label,
+  quiet,
+}: {
+  feed: EnvironmentInbox;
+  label: string;
+  quiet: boolean;
+}) {
+  // Under "All organisations" an organisation without ClickUp stays quiet; it says so when selected.
+  if (quiet && (feed.error || (feed.health && !feed.health.configured))) return null;
   const message = feed.error
     ? `${label}: the inbox service is not answering at ${feed.base}.`
     : feed.health && !feed.health.configured
@@ -587,7 +602,7 @@ function Detail({
               onClick={() => setComposingTask(true)}
             >
               <ListChecksIcon className="size-3.5" />
-              Make this a task
+              Let Chief build it
             </Button>
           ) : null}
           {row.url ? (
@@ -831,9 +846,9 @@ function TaskComposer({
     <div className="flex flex-col rounded-xl border border-border/60 bg-card/40 shadow-xs/5">
       <div className="flex flex-wrap items-center gap-2 border-b border-border/50 px-4 py-2.5 text-sm">
         <ListChecksIcon className="size-4 text-muted-foreground" />
-        <span className="font-medium">New task</span>
+        <span className="font-medium">Let Chief build it</span>
         <span className="text-xs text-muted-foreground">
-          The spec-writer proposes a spec with checks. Nothing is built until you approve.
+          Chief writes a spec with checks first. Nothing is built until you approve it.
         </span>
       </div>
       <Textarea

@@ -645,7 +645,9 @@ export function MyTasksPage() {
   const filtered = visible.length < openRows.length;
   const notices = (
     <Notices
-      notConnected={feedsPending ? [] : notConnected.map((f) => labelFor(f.environmentId))}
+      notConnected={
+        feedsPending || scope === "all" ? [] : notConnected.map((f) => labelFor(f.environmentId))
+      }
       errors={Object.entries(errors).map(([id, err]) => `${labelFor(id as EnvironmentId)}: ${err}`)}
     />
   );

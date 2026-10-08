@@ -9,6 +9,7 @@ import { Button, InlineButton } from "../ui/button";
 import { Input } from "../ui/input";
 import { Menu, MenuCheckboxItem, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import { Switch } from "../ui/switch";
 import { useOptionalSettingsScope } from "./SettingsScopeContext";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
 
@@ -214,6 +215,20 @@ function ClickUpRows({ environmentId, label }: { environmentId: EnvironmentId; l
             }
           />
           <WatchedChannelsRow base={base!} watched={config.watch_channels} onChange={load} />
+          <SettingsRow
+            title="Done also resolves"
+            description="When you press Done on a comment assigned to you, also mark it resolved in ClickUp. Colleagues see it resolved."
+            control={
+              <Switch
+                checked={config.resolve_on_done === true}
+                disabled={saving}
+                aria-label="Done also resolves assigned comments in ClickUp"
+                onCheckedChange={(checked) =>
+                  void call("/config/inbox", "PUT", { resolve_on_done: Boolean(checked) })
+                }
+              />
+            }
+          />
         </>
       ) : null}
     </>

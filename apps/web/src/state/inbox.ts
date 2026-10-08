@@ -61,6 +61,7 @@ export interface InboxConfig {
   readonly workspaces: ReadonlyArray<{ readonly id: string; readonly name: string }>;
   readonly user: { readonly id: number; readonly username: string } | null;
   readonly watch_channels: ReadonlyArray<string>;
+  readonly resolve_on_done?: boolean;
   readonly last_error: string | null;
   readonly last_poll_at: string | null;
 }

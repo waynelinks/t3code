@@ -143,6 +143,11 @@ import {
   useRightPanelStore,
   type PullRequestSurface,
 } from "../rightPanelStore";
+import {
+  inOrganisationScope,
+  useOrganisationLabel,
+  useOrganisationScope,
+} from "../state/organisation";
 import { useDebouncedValue } from "../state/queries";
 import { useAllEnvironmentShellsBootstrapped, useProjects } from "../state/entities";
 import { useEnvironments } from "../state/environments";
@@ -349,6 +354,9 @@ function PullRequestsRouteView() {
   const navigate = useNavigate({ from: Route.fullPath });
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const { environments } = useEnvironments();
+  // Chief: the organisation switcher scopes this page too, and companies show by name.
+  const organisationScope = useOrganisationScope();
+  const organisationLabel = useOrganisationLabel();
   // Every connected environment that has said it can list pull requests. Sorted, so the query
   // keys, the scope key and the stored snapshot all read the same whichever order the
   // connections happened to come up in.
@@ -356,10 +364,12 @@ function PullRequestsRouteView() {
     () =>
       environments
         .filter(
-          (environment) => environment.serverConfig?.environment.capabilities.pullRequests === true,
+          (environment) =>
+            environment.serverConfig?.environment.capabilities.pullRequests === true &&
+            inOrganisationScope(organisationScope, environment.environmentId),
         )
         .toSorted((left, right) => left.environmentId.localeCompare(right.environmentId)),
-    [environments],
+    [environments, organisationScope],
   );
   // The server the URL asks for, kept only while it is one the page could read: a link naming a
   // server this workspace no longer has falls back to all of them rather than to nothing.
@@ -405,9 +415,15 @@ function PullRequestsRouteView() {
   const environmentLabels = useMemo(
     () =>
       new Map(
-        environments.map((environment) => [environment.environmentId, environment.label] as const),
+        environments.map(
+          (environment) =>
+            [
+              environment.environmentId,
+              organisationLabel(environment.environmentId, environment.label),
+            ] as const,
+        ),
       ),
-    [environments],
+    [environments, organisationLabel],
   );
   // The scope the URL asks for, once the environments have had their say about whether it exists.
   const scopedProjectId = useMemo(
@@ -1877,7 +1893,7 @@ function PullRequestsRouteView() {
     { value: "", label: "All servers", Icon: LayersIcon },
     ...capableEnvironments.map((environment) => ({
       value: environment.environmentId,
-      label: environment.label,
+      label: organisationLabel(environment.environmentId, environment.label),
       Icon: environmentMachineIcon(resolveEnvironmentMachineKind(environment.serverConfig)),
     })),
   ];
