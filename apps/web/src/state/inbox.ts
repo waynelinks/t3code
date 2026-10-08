@@ -131,6 +131,7 @@ export interface MyTaskDetail {
 
 export interface InboxHealth {
   readonly mytasks?: MyTasksSummary;
+  readonly specs?: { readonly needs_you: number };
   readonly configured: boolean;
   readonly last_error: string | null;
   readonly last_poll_at: string | null;

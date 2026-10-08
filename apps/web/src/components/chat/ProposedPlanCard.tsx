@@ -32,6 +32,9 @@ import { stackedThreadToast, toastManager } from "../ui/toast";
 import { projectEnvironment } from "~/state/projects";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useAtomCommand } from "~/state/use-atom-command";
+import { useNavigate } from "@tanstack/react-router";
+import { useEnvironmentHttpBaseUrl } from "~/state/environments";
+import { inboxBaseFor, inboxRequest } from "~/state/inbox";
 
 export const ProposedPlanCard = memo(function ProposedPlanCard({
   planMarkdown,
@@ -47,6 +50,31 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
   workspaceRoot: string | undefined;
 }) {
   const [expanded, setExpanded] = useState(false);
+  // Chief: a finished plan becomes the PRD of a spec.
+  const navigate = useNavigate();
+  const chiefBase = inboxBaseFor(useEnvironmentHttpBaseUrl(environmentId));
+  const [creatingSpec, setCreatingSpec] = useState(false);
+  const handleCreateSpec = () => {
+    if (!chiefBase || !workspaceRoot) return;
+    setCreatingSpec(true);
+    void inboxRequest<{ id: string }>(chiefBase, "/specs", {
+      method: "POST",
+      body: {
+        title: proposedPlanTitle(planMarkdown) ?? "Plan",
+        repo: workspaceRoot,
+        prd: normalizePlanMarkdownForExport(planMarkdown),
+      },
+    })
+      .then((sp) => navigate({ to: "/specs", search: { spec: sp.id } }))
+      .catch((error) =>
+        toastManager.add({
+          type: "error",
+          title: "Could not create the PRD",
+          description: error instanceof Error ? error.message : String(error),
+        }),
+      )
+      .finally(() => setCreatingSpec(false));
+  };
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [savePath, setSavePath] = useState("");
   const [isSavingToWorkspace, setIsSavingToWorkspace] = useState(false);
@@ -163,6 +191,12 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
           <MenuPopup align="end">
             <MenuItem onClick={handleCopyPlan}>
               {isCopied ? "Copied!" : "Copy to clipboard"}
+            </MenuItem>
+            <MenuItem
+              onClick={handleCreateSpec}
+              disabled={!chiefBase || !workspaceRoot || creatingSpec}
+            >
+              Create PRD in Chief
             </MenuItem>
             <MenuItem onClick={handleDownload}>Download as markdown</MenuItem>
             <MenuItem onClick={openSaveDialog} disabled={!workspaceRoot || isSavingToWorkspace}>
