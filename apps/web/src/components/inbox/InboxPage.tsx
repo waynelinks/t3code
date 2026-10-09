@@ -1171,15 +1171,26 @@ function TaskPanel({
         <>
           {discard}
           {!task.pr_url ? (
-            <Button
-              size="xs"
-              variant="outline"
-              disabled={busy}
-              title="Both pull requests, main and its staging pair, as drafts with the reasons in their bodies. Nothing is merged."
-              onClick={() => void onAct(row, "pr-anyway")}
-            >
-              Open both PRs anyway
-            </Button>
+            <>
+              <Button
+                size="xs"
+                variant="outline"
+                disabled={busy}
+                title="After a fix on Chief's side (a check that could not run): the same tree is checked again first; finished work goes straight to review and the pull requests."
+                onClick={() => void onAct(row, "retry")}
+              >
+                Run the checks again
+              </Button>
+              <Button
+                size="xs"
+                variant="outline"
+                disabled={busy}
+                title="Both pull requests, main and its staging pair, as drafts with the reasons in their bodies. Nothing is merged."
+                onClick={() => void onAct(row, "pr-anyway")}
+              >
+                Open both PRs anyway
+              </Button>
+            </>
           ) : null}
           {task.pr_url ? (
             <Button

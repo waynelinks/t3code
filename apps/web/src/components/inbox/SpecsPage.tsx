@@ -1372,7 +1372,7 @@ function StepRow({
   repoName: (path: string) => string;
   busy: boolean;
   canBuild: boolean;
-  onAction: (action: "build" | "approve" | "discard" | "pr-anyway") => Promise<boolean>;
+  onAction: (action: "build" | "approve" | "discard" | "pr-anyway" | "retry") => Promise<boolean>;
   onWatch: (threadId: string) => void;
   onEdit: (patch: {
     summary?: string;
@@ -1481,15 +1481,26 @@ function StepRow({
                   Discard
                 </Button>
                 {ev && !ev.pr_url ? (
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    disabled={busy}
-                    title="Both pull requests, main and its staging pair, as drafts with the reasons in their bodies. Nothing is merged."
-                    onClick={() => void onAction("pr-anyway")}
-                  >
-                    Open both PRs anyway
-                  </Button>
+                  <>
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      disabled={busy}
+                      title="After a fix on Chief's side (a check that could not run): the same tree is checked again first; finished work goes straight to review and the pull requests."
+                      onClick={() => void onAction("retry")}
+                    >
+                      Run the checks again
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      disabled={busy}
+                      title="Both pull requests, main and its staging pair, as drafts with the reasons in their bodies. Nothing is merged."
+                      onClick={() => void onAction("pr-anyway")}
+                    >
+                      Open both PRs anyway
+                    </Button>
+                  </>
                 ) : null}
               </>
             ) : null}
