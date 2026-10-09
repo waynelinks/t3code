@@ -72,6 +72,13 @@ export interface InboxTask {
   readonly staging_pr_url?: string | null;
   readonly pair_error?: string | null;
   readonly pr_ready?: boolean;
+  /** The pull requests' CI as Chief last read it: waiting, fixing (round n), green, or needs_owner. */
+  readonly ci?: {
+    readonly status: string;
+    readonly rounds: number;
+    readonly failed: ReadonlyArray<string>;
+    readonly reason: string | null;
+  } | null;
   readonly reasons?: string | null;
   readonly error?: string | null;
   /** The T3 thread the build runs in, when it runs as one. */

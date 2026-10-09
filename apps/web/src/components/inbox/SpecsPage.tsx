@@ -1301,6 +1301,30 @@ function StepEditor({
 }
 
 /** Pull requests the owner opened by hand (main and its staging pair): the step ticks when both are merged. */
+/** One line on a pull request's CI as Chief last read it. */
+export function ciLine(ci: {
+  readonly status: string;
+  readonly rounds: number;
+  readonly failed: ReadonlyArray<string>;
+  readonly reason: string | null;
+}): string {
+  const red = ci.failed.length ? ` (${ci.failed.join(", ")})` : "";
+  switch (ci.status) {
+    case "green":
+      return ci.rounds
+        ? `CI green after ${ci.rounds} ${ci.rounds === 1 ? "fix" : "fixes"} by Chief`
+        : "CI green";
+    case "waiting":
+      return "CI running on both pull requests";
+    case "fixing":
+      return `CI red${red}: Chief is fixing it, round ${ci.rounds}`;
+    case "needs_owner":
+      return `CI red${red}: ${ci.reason ?? "needs you"}`;
+    default:
+      return `CI: ${ci.reason ?? ci.status}`;
+  }
+}
+
 function LinkPrs({
   step,
   busy,
@@ -1572,6 +1596,19 @@ function StepRow({
           )}
           {ev?.pair_error && !ev.staging_pr_url ? (
             <p className="text-xs text-warning">Staging pair: {ev.pair_error}</p>
+          ) : null}
+          {ev?.ci ? (
+            <p
+              className={
+                ev.ci.status === "green"
+                  ? "text-xs text-muted-foreground"
+                  : ev.ci.status === "needs_owner"
+                    ? "text-xs text-warning"
+                    : "text-xs text-muted-foreground"
+              }
+            >
+              {ciLine(ev.ci)}
+            </p>
           ) : null}
           {state === "needs_you" || state === "todo" || state === "pr_open" ? (
             <LinkPrs step={step} busy={busy} onLink={onLink} />

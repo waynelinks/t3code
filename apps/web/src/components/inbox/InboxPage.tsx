@@ -54,6 +54,7 @@ import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { Avatar, IconAction, SearchField, timeAgo, ago } from "./shared";
 import { SpecSheet } from "./SpecSheet";
+import { ciLine } from "./SpecsPage";
 import { useCompanyRepos, WorkPanel } from "./WorkPanel";
 
 interface Row extends InboxItem {
@@ -1156,6 +1157,16 @@ function TaskPanel({
               · no staging pair{task.pair_error ? `: ${task.pair_error}` : ""}
             </span>
           )}
+          {task.ci ? (
+            <span
+              className={
+                task.ci.status === "needs_owner" ? "text-warning" : "text-muted-foreground"
+              }
+            >
+              {" "}
+              · {ciLine(task.ci)}
+            </span>
+          ) : null}
         </>
       ) : (
         `Built and reviewed.${task.reasons ? ` The pull requests did not open: ${task.reasons}` : ""}`
