@@ -1301,6 +1301,15 @@ function StepEditor({
 }
 
 /** Pull requests the owner opened by hand (main and its staging pair): the step ticks when both are merged. */
+/** "Waiting for memory" with how much is free and wanted. */
+export function memoryLine(w: {
+  readonly available_mb: number;
+  readonly threshold_mb: number;
+}): string {
+  const gb = (mb: number) => (mb / 1024).toFixed(1);
+  return `Waiting for memory: ${gb(w.available_mb)} GB free, ${gb(w.threshold_mb)} GB wanted. It starts by itself once memory is free.`;
+}
+
 /** One line on a pull request's CI as Chief last read it. */
 export function ciLine(ci: {
   readonly status: string;
@@ -1596,6 +1605,9 @@ function StepRow({
           )}
           {ev?.pair_error && !ev.staging_pr_url ? (
             <p className="text-xs text-warning">Staging pair: {ev.pair_error}</p>
+          ) : null}
+          {step.waiting_memory ? (
+            <p className="text-xs text-warning">{memoryLine(step.waiting_memory)}</p>
           ) : null}
           {ev?.ci ? (
             <p

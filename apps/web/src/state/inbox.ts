@@ -72,6 +72,13 @@ export interface InboxTask {
   readonly staging_pr_url?: string | null;
   readonly pair_error?: string | null;
   readonly pr_ready?: boolean;
+  /** The work waits for memory (the company's budget): what, since when, how much is free and wanted. */
+  readonly waiting_memory?: {
+    readonly what: string;
+    readonly since: string;
+    readonly available_mb: number;
+    readonly threshold_mb: number;
+  } | null;
   /** The pull requests' CI as Chief last read it: waiting, fixing (round n), green, or needs_owner. */
   readonly ci?: {
     readonly status: string;

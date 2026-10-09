@@ -54,7 +54,7 @@ import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { Avatar, IconAction, SearchField, timeAgo, ago } from "./shared";
 import { SpecSheet } from "./SpecSheet";
-import { ciLine } from "./SpecsPage";
+import { ciLine, memoryLine } from "./SpecsPage";
 import { useCompanyRepos, WorkPanel } from "./WorkPanel";
 
 interface Row extends InboxItem {
@@ -1157,6 +1157,9 @@ function TaskPanel({
               · no staging pair{task.pair_error ? `: ${task.pair_error}` : ""}
             </span>
           )}
+          {task.waiting_memory ? (
+            <span className="text-warning"> · {memoryLine(task.waiting_memory)}</span>
+          ) : null}
           {task.ci ? (
             <span
               className={

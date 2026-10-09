@@ -44,6 +44,14 @@ export interface SpecStep {
   readonly evidence?: SpecStepEvidence | null;
   /** Pull requests the owner opened by hand for this step. */
   readonly pr_links?: { readonly main: string; readonly staging: string } | null;
+  /** The work waits for memory (the company's budget): what, since when, how much is free and wanted. */
+  readonly waiting_memory?: {
+    readonly what: string;
+    readonly since: string;
+    readonly available_mb: number;
+    readonly threshold_mb: number;
+  } | null;
+
   /** Merged pairs in the step's repository whose title matches: offered as "Link these?", never linked by Chief. */
   readonly suggested_links?: ReadonlyArray<{
     readonly title: string;
