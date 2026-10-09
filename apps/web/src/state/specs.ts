@@ -44,6 +44,15 @@ export interface SpecStep {
   readonly evidence?: SpecStepEvidence | null;
   /** Pull requests the owner opened by hand for this step. */
   readonly pr_links?: { readonly main: string; readonly staging: string } | null;
+  /** Merged pairs in the step's repository whose title matches: offered as "Link these?", never linked by Chief. */
+  readonly suggested_links?: ReadonlyArray<{
+    readonly title: string;
+    readonly main: string;
+    readonly staging: string;
+    readonly main_number: number;
+    readonly staging_number: number;
+    readonly merged_at: string | null;
+  }>;
 }
 export type SpecStatus =
   | "prd"

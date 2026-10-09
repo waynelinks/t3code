@@ -1611,7 +1611,32 @@ function StepRow({
             </p>
           ) : null}
           {state === "needs_you" || state === "todo" || state === "pr_open" ? (
-            <LinkPrs step={step} busy={busy} onLink={onLink} />
+            <>
+              {step.suggested_links?.length ? (
+                <div className="flex flex-col gap-1 rounded-md border border-border/50 px-2.5 py-2 text-xs">
+                  <span className="text-muted-foreground">
+                    Merged already in this repository. Link these?
+                  </span>
+                  {step.suggested_links.map((s) => (
+                    <div key={s.main} className="flex flex-wrap items-center gap-2">
+                      <span className="min-w-0 [overflow-wrap:anywhere]">
+                        {s.title} · main #{s.main_number} · staging #{s.staging_number}
+                        {s.merged_at ? ` · merged ${s.merged_at.slice(0, 10)}` : ""}
+                      </span>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => void onLink({ main: s.main, staging: s.staging })}
+                      >
+                        Link these
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <LinkPrs step={step} busy={busy} onLink={onLink} />
+            </>
           ) : null}
           {step.acceptance.length ? (
             <div>
