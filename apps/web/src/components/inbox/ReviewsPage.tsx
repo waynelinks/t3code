@@ -280,7 +280,7 @@ export function ReviewsPage() {
                       ) : (
                         board.stages[col.id].map((c) => (
                           <StageCard
-                            key={`${c.stage}-${c.thread}`}
+                            key={`${c.stage}-${c.card ?? c.thread}`}
                             card={c}
                             stuck={stuckByThread.get(c.thread) ?? null}
                             busy={busy}

@@ -29,6 +29,8 @@ export interface ReleaseResult {
 }
 export interface ReleaseCard {
   readonly thread: string;
+  /** One card per pull request: the thread plus the pull request it shows. */
+  readonly card?: string;
   readonly link: string;
   readonly stage: "requested" | "reviewing" | "reviewed" | "replied";
   readonly asked_by_name?: string;
